@@ -1,0 +1,58 @@
+:root {
+    --hm-navy: #17324d;
+    --hm-teal: #168a87;
+    --hm-gold: #b89a5a;
+    --hm-ivory: #f7f5ef;
+    --hm-white: #ffffff;
+    --hm-text: #243746;
+    --hm-muted: #71808c;
+    --hm-border: #e3e7ea;
+}
+
+body {
+    background-color: var(--hm-ivory);
+    color: var(--hm-text);
+    font-family: Arial, sans-serif;
+}
+
+.hm-navbar {
+    background-color: var(--hm-navy);
+}
+
+.hm-brand {
+    color: var(--hm-white);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.hm-card {
+    background-color: var(--hm-white);
+    border: 1px solid var(--hm-border);
+    border-radius: 16px;
+    box-shadow: 0 6px 20px rgba(23, 50, 77, 0.07);
+}
+
+.btn-hm-primary {
+    background-color: var(--hm-teal);
+    border-color: var(--hm-teal);
+    color: var(--hm-white);
+}
+
+.btn-hm-primary:hover {
+    background-color: #11736f;
+    border-color: #11736f;
+    color: var(--hm-white);
+}
+
+.hm-gold {
+    color: var(--hm-gold);
+}
+
+.hm-page-title {
+    color: var(--hm-navy);
+    font-weight: 700;
+}
+
+.hm-muted {
+    color: var(--hm-muted);
+}
