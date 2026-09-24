@@ -38,3 +38,5 @@ $page_title = $page_title ?? APP_NAME;
 </head>
 
 <body>
+    
+    <?php require_once __DIR__ . '/navbar.php'; ?>

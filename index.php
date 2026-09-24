@@ -6,18 +6,7 @@ require_once __DIR__ . '/includes/header.php';
 
 ?>
 
-<nav class="navbar hm-navbar">
-    <div class="container">
-
-        <a
-            href="<?php echo BASE_URL; ?>/"
-            class="hm-brand"
-        >
-            Hospital Marketing
-        </a>
-
-    </div>
-</nav>
+ 
 
 
 <main class="container py-5">

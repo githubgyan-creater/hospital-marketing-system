@@ -13,27 +13,7 @@ require_once __DIR__ . '/../includes/header.php';
 
 ?>
 
-<nav class="navbar hm-navbar">
-
-    <div class="container">
-
-        <a
-            href="<?php echo BASE_URL; ?>/"
-            class="hm-brand"
-        >
-            Hospital Marketing
-        </a>
-
-        <a
-            href="<?php echo BASE_URL; ?>/logout.php"
-            class="btn btn-outline-light btn-sm"
-        >
-            Logout
-        </a>
-
-    </div>
-
-</nav>
+ 
 
 
 <main class="container py-5">
@@ -78,20 +58,31 @@ require_once __DIR__ . '/../includes/header.php';
 
         <div class="col-md-4">
 
-            <div class="hm-card p-4 h-100">
+    <div class="hm-card p-4 h-100">
 
-                <h5>
-                    Marketing Operations
-                </h5>
-
-                <p class="hm-muted">
-                    Leads, campaigns, referrals and events.
-                </p>
-
-            </div>
-
+        <div class="mb-3">
+            <span class="hm-gold fs-4">👥</span>
         </div>
 
+        <h5 class="fw-bold">
+            User Management
+        </h5>
+
+        <p class="hm-muted">
+            Create and manage Manager, Telecaller,
+            and Marketing Executive accounts.
+        </p>
+
+        <a
+            href="<?php echo BASE_URL; ?>/admin/users/index.php"
+            class="btn btn-hm-primary"
+        >
+            Manage Users
+        </a>
+
+    </div>
+
+</div>
 
         <div class="col-md-4">
 
