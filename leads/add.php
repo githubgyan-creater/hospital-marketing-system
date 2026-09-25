@@ -25,13 +25,35 @@ $duplicate_lead = null;
 */
 
 $source_stmt = $pdo->query("
-    SELECT id, name
+    SELECT
+        id,
+        name
     FROM marketing_sources
     WHERE status = 'active'
     ORDER BY name ASC
 ");
 
 $sources = $source_stmt->fetchAll();
+
+
+/*
+|--------------------------------------------------------------------------
+| Get Active / Planned Campaigns
+|--------------------------------------------------------------------------
+*/
+
+$campaign_stmt = $pdo->query("
+    SELECT
+        id,
+        name,
+        campaign_type,
+        status
+    FROM campaigns
+    WHERE status IN ('Planned', 'Active')
+    ORDER BY name ASC
+");
+
+$campaigns = $campaign_stmt->fetchAll();
 
 
 /*
@@ -95,6 +117,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_POST['source_id']
     )
         ? (int) $_POST['source_id']
+        : null;
+
+    $campaign_id = !empty(
+        $_POST['campaign_id']
+    )
+        ? (int) $_POST['campaign_id']
         : null;
 
     $priority = $_POST['priority'] ?? 'Medium';
@@ -162,6 +190,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     /*
     |--------------------------------------------------------------------------
+    | Validate Campaign
+    |--------------------------------------------------------------------------
+    */
+
+    if ($campaign_id !== null) {
+
+        $campaign_check_stmt = $pdo->prepare("
+            SELECT
+                id
+            FROM campaigns
+            WHERE id = ?
+              AND status IN ('Planned', 'Active')
+            LIMIT 1
+        ");
+
+        $campaign_check_stmt->execute([
+            $campaign_id
+        ]);
+
+        $campaign_exists =
+            $campaign_check_stmt->fetch();
+
+        if (!$campaign_exists) {
+
+            $errors[] =
+                'Selected campaign is not available.';
+        }
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
     | Duplicate Lead Check
     |--------------------------------------------------------------------------
     */
@@ -179,16 +239,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 l.status,
                 l.priority,
                 u.name AS assigned_name
-
             FROM leads l
-
             LEFT JOIN users u
                 ON l.assigned_to = u.id
-
             WHERE l.phone = :phone
-
             ORDER BY l.id DESC
-
             LIMIT 1
         ");
 
@@ -226,6 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 email,
                 service_interest,
                 source_id,
+                campaign_id,
                 status,
                 priority,
                 assigned_to,
@@ -238,6 +294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 :email,
                 :service_interest,
                 :source_id,
+                :campaign_id,
                 'New',
                 :priority,
                 :assigned_to,
@@ -267,6 +324,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             'source_id' =>
                 $source_id,
+
+            'campaign_id' =>
+                $campaign_id,
 
             'priority' =>
                 $priority,
@@ -330,6 +390,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         /*
         |--------------------------------------------------------------------------
+        | Automatic Campaign Activity
+        |--------------------------------------------------------------------------
+        */
+
+        if ($campaign_id !== null) {
+
+            $campaign_name_stmt = $pdo->prepare("
+                SELECT
+                    name
+                FROM campaigns
+                WHERE id = ?
+                LIMIT 1
+            ");
+
+            $campaign_name_stmt->execute([
+                $campaign_id
+            ]);
+
+            $selected_campaign =
+                $campaign_name_stmt->fetch();
+
+
+            if ($selected_campaign) {
+
+                $campaign_activity_stmt =
+                    $pdo->prepare("
+                        INSERT INTO lead_activities (
+                            lead_id,
+                            user_id,
+                            activity_type,
+                            description,
+                            activity_at
+                        )
+                        VALUES (
+                            :lead_id,
+                            :user_id,
+                            'Campaign Assigned',
+                            :description,
+                            NOW()
+                        )
+                    ");
+
+                $campaign_activity_stmt->execute([
+
+                    'lead_id' =>
+                        $lead_id,
+
+                    'user_id' =>
+                        $user['id'],
+
+                    'description' =>
+                        'Lead associated with campaign: ' .
+                        $selected_campaign['name'] .
+                        '.'
+                ]);
+            }
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
         | Automatic Lead Assigned Activity
         |--------------------------------------------------------------------------
         */
@@ -337,7 +458,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($assigned_to !== null) {
 
             $assigned_stmt = $pdo->prepare("
-                SELECT name
+                SELECT
+                    name
                 FROM users
                 WHERE id = :id
                 LIMIT 1
@@ -438,7 +560,6 @@ require_once __DIR__ . '/../includes/header.php';
         </p>
 
     </div>
-
 
 
     <!-- Duplicate Warning -->
@@ -547,7 +668,6 @@ require_once __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
 
-
     <!-- Error Messages -->
 
     <?php if (
@@ -585,7 +705,6 @@ require_once __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
 
-
     <!-- Lead Form -->
 
     <div class="hm-card p-4">
@@ -621,7 +740,6 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
 
 
-
                 <!-- Phone -->
 
                 <div class="col-md-6">
@@ -652,7 +770,6 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
 
 
-
                 <!-- Email -->
 
                 <div class="col-md-6">
@@ -676,7 +793,6 @@ require_once __DIR__ . '/../includes/header.php';
                     >
 
                 </div>
-
 
 
                 <!-- Service Interest -->
@@ -704,7 +820,6 @@ require_once __DIR__ . '/../includes/header.php';
                     >
 
                 </div>
-
 
 
                 <!-- Source -->
@@ -767,6 +882,79 @@ require_once __DIR__ . '/../includes/header.php';
 
                 </div>
 
+
+                <!-- Campaign -->
+
+                <div class="col-md-6">
+
+                    <label class="form-label">
+                        Campaign
+                    </label>
+
+                    <select
+                        name="campaign_id"
+                        class="form-select"
+                    >
+
+                        <option value="">
+                            Select Campaign
+                        </option>
+
+
+                        <?php foreach (
+                            $campaigns
+                            as $campaign
+                        ): ?>
+
+                            <option
+                                value="<?php
+                                    echo $campaign['id'];
+                                ?>"
+                                <?php
+
+                                echo (
+                                    (
+                                        $_POST[
+                                            'campaign_id'
+                                        ]
+                                        ?? ''
+                                    )
+                                    == $campaign['id']
+                                )
+                                    ? 'selected'
+                                    : '';
+
+                                ?>
+                            >
+
+                                <?php
+
+                                echo htmlspecialchars(
+                                    $campaign['name']
+                                );
+
+                                ?>
+
+                                -
+                                <?php
+
+                                echo htmlspecialchars(
+                                    $campaign['status']
+                                );
+
+                                ?>
+
+                            </option>
+
+                        <?php endforeach; ?>
+
+                    </select>
+
+                    <small class="text-muted">
+                        Only Planned and Active campaigns are shown.
+                    </small>
+
+                </div>
 
 
                 <!-- Priority -->
@@ -852,7 +1040,6 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
 
 
-
                 <!-- Assigned To -->
 
                 <div class="col-md-6">
@@ -924,7 +1111,6 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
 
 
-
                 <!-- Notes -->
 
                 <div class="col-12">
@@ -947,7 +1133,6 @@ require_once __DIR__ . '/../includes/header.php';
                     ?></textarea>
 
                 </div>
-
 
 
                 <!-- Buttons -->

@@ -1,7 +1,7 @@
- <?php
+<?php
 
-require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../includes/role_check.php';
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/role_check.php';
 
 require_role('manager');
 
@@ -10,78 +10,137 @@ $user = current_user();
 
 /*
 |--------------------------------------------------------------------------
-| Total Leads
+| Get Team Member ID
 |--------------------------------------------------------------------------
 */
 
-$stmt = $pdo->query("
+$member_id = isset($_GET['id'])
+    ? (int) $_GET['id']
+    : 0;
+
+if ($member_id <= 0) {
+
+    http_response_code(400);
+
+    exit('Invalid team member.');
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Get Team Member
+|--------------------------------------------------------------------------
+*/
+
+$stmt = $pdo->prepare("
+    SELECT
+        u.id,
+        u.name,
+        u.email,
+        u.status,
+        u.created_at,
+        r.name AS role_name,
+        r.display_name AS role_display_name
+    FROM users u
+    INNER JOIN roles r
+        ON u.role_id = r.id
+    WHERE u.id = ?
+      AND r.name IN ('telecaller', 'marketing')
+    LIMIT 1
+");
+
+$stmt->execute([
+    $member_id
+]);
+
+$member = $stmt->fetch();
+
+
+if (!$member) {
+
+    http_response_code(404);
+
+    exit('Team member not found.');
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Total Assigned Leads
+|--------------------------------------------------------------------------
+*/
+
+$stmt = $pdo->prepare("
     SELECT COUNT(*)
     FROM leads
+    WHERE assigned_to = ?
 ");
+
+$stmt->execute([
+    $member_id
+]);
 
 $total_leads = (int) $stmt->fetchColumn();
 
 
 /*
 |--------------------------------------------------------------------------
-| New Leads
+| New Assigned Leads
 |--------------------------------------------------------------------------
 */
 
-$stmt = $pdo->query("
+$stmt = $pdo->prepare("
     SELECT COUNT(*)
     FROM leads
-    WHERE status = 'New'
+    WHERE assigned_to = ?
+      AND status = 'New'
 ");
+
+$stmt->execute([
+    $member_id
+]);
 
 $new_leads = (int) $stmt->fetchColumn();
 
 
 /*
 |--------------------------------------------------------------------------
-| Today's Follow-ups
+| Calls Today
 |--------------------------------------------------------------------------
 */
 
-$stmt = $pdo->query("
-    SELECT COUNT(*)
-    FROM leads
-    WHERE next_action_at IS NOT NULL
-      AND DATE(next_action_at) = CURDATE()
-");
-
-$today_followups = (int) $stmt->fetchColumn();
-
-
-/*
-|--------------------------------------------------------------------------
-| Overdue Follow-ups
-|--------------------------------------------------------------------------
-*/
-
-$stmt = $pdo->query("
-    SELECT COUNT(*)
-    FROM leads
-    WHERE next_action_at IS NOT NULL
-      AND next_action_at < NOW()
-");
-
-$overdue_followups = (int) $stmt->fetchColumn();
-
-
-/*
-|--------------------------------------------------------------------------
-| Today's Calls
-|--------------------------------------------------------------------------
-*/
-
-$stmt = $pdo->query("
+$stmt = $pdo->prepare("
     SELECT COUNT(*)
     FROM lead_calls
-    WHERE DATE(call_at) = CURDATE()
+    WHERE user_id = ?
+      AND DATE(call_at) = CURDATE()
 ");
 
-$today_calls = (int) $stmt->fetchColumn();
+$stmt->execute([
+    $member_id
+]);
+
+$calls_today = (int) $stmt->fetchColumn();
+
+
+/*
+|--------------------------------------------------------------------------
+| Activities Today
+|--------------------------------------------------------------------------
+*/
+
+$stmt = $pdo->prepare("
+    SELECT COUNT(*)
+    FROM lead_activities
+    WHERE user_id = ?
+      AND DATE(activity_at) = CURDATE()
+");
+
+$stmt->execute([
+    $member_id
+]);
+
+$activities_today = (int) $stmt->fetchColumn();
 
 
 /*
@@ -90,118 +149,159 @@ $today_calls = (int) $stmt->fetchColumn();
 |--------------------------------------------------------------------------
 */
 
-$stmt = $pdo->query("
+$stmt = $pdo->prepare("
     SELECT COUNT(*)
-    FROM appointments
-    WHERE DATE(appointment_date) = CURDATE()
-      AND status NOT IN ('Cancelled', 'No Show')
+    FROM appointments a
+    INNER JOIN leads l
+        ON a.lead_id = l.id
+    WHERE l.assigned_to = ?
+      AND DATE(a.appointment_date) = CURDATE()
+      AND a.status NOT IN ('Cancelled', 'No Show')
 ");
 
-$today_appointments = (int) $stmt->fetchColumn();
+$stmt->execute([
+    $member_id
+]);
+
+$appointments_today = (int) $stmt->fetchColumn();
 
 
 /*
 |--------------------------------------------------------------------------
-| Active Team Members
+| Active Appointments
 |--------------------------------------------------------------------------
 */
 
-$stmt = $pdo->query("
+$stmt = $pdo->prepare("
     SELECT COUNT(*)
-    FROM users u
-    INNER JOIN roles r
-        ON u.role_id = r.id
-    WHERE u.status = 'active'
-      AND r.name IN ('telecaller', 'marketing')
+    FROM appointments a
+    INNER JOIN leads l
+        ON a.lead_id = l.id
+    WHERE l.assigned_to = ?
+      AND a.status IN ('Scheduled', 'Confirmed')
 ");
 
-$active_team = (int) $stmt->fetchColumn();
+$stmt->execute([
+    $member_id
+]);
+
+$active_appointments = (int) $stmt->fetchColumn();
 
 
 /*
 |--------------------------------------------------------------------------
-| Team Members
+| Overdue Follow-ups
 |--------------------------------------------------------------------------
 */
 
-$stmt = $pdo->query("
-    SELECT
-        u.id,
-        u.name,
-        u.email,
-        r.display_name AS role_name
-    FROM users u
-    INNER JOIN roles r
-        ON u.role_id = r.id
-    WHERE u.status = 'active'
-      AND r.name IN ('telecaller', 'marketing')
-    ORDER BY u.name ASC
+$stmt = $pdo->prepare("
+    SELECT COUNT(*)
+    FROM leads
+    WHERE assigned_to = ?
+      AND next_action_at IS NOT NULL
+      AND next_action_at < NOW()
 ");
 
-$team_members = $stmt->fetchAll();
+$stmt->execute([
+    $member_id
+]);
+
+$overdue_followups = (int) $stmt->fetchColumn();
 
 
 /*
 |--------------------------------------------------------------------------
-| Recent Lead Activities
+| Recent Activities
 |--------------------------------------------------------------------------
 */
 
-$stmt = $pdo->query("
+$stmt = $pdo->prepare("
     SELECT
         la.activity_type,
         la.description,
         la.activity_at,
-        l.name AS lead_name,
-        u.name AS user_name
+        l.id AS lead_id,
+        l.name AS lead_name
     FROM lead_activities la
-
     INNER JOIN leads l
         ON la.lead_id = l.id
-
-    INNER JOIN users u
-        ON la.user_id = u.id
-
+    WHERE la.user_id = ?
     ORDER BY la.activity_at DESC
-
     LIMIT 10
 ");
+
+$stmt->execute([
+    $member_id
+]);
 
 $recent_activities = $stmt->fetchAll();
 
 
 /*
 |--------------------------------------------------------------------------
-| Recent Leads
+| Recent Assigned Leads
 |--------------------------------------------------------------------------
 */
 
-$stmt = $pdo->query("
+$stmt = $pdo->prepare("
     SELECT
-        l.id,
-        l.name,
-        l.phone,
-        l.service_interest,
-        l.status,
-        l.priority,
-        l.created_at,
-        u.name AS assigned_name
-    FROM leads l
-
-    LEFT JOIN users u
-        ON l.assigned_to = u.id
-
-    ORDER BY l.created_at DESC
-
+        id,
+        name,
+        phone,
+        service_interest,
+        status,
+        priority,
+        next_action_type,
+        next_action_at,
+        created_at
+    FROM leads
+    WHERE assigned_to = ?
+    ORDER BY created_at DESC
     LIMIT 10
 ");
+
+$stmt->execute([
+    $member_id
+]);
 
 $recent_leads = $stmt->fetchAll();
 
 
-$page_title = 'Manager Control Center';
+/*
+|--------------------------------------------------------------------------
+| Upcoming Appointments
+|--------------------------------------------------------------------------
+*/
 
-require_once __DIR__ . '/../includes/header.php';
+$stmt = $pdo->prepare("
+    SELECT
+        a.id,
+        a.lead_id,
+        a.appointment_date,
+        a.appointment_type,
+        a.status,
+        l.name AS lead_name,
+        l.phone AS lead_phone
+    FROM appointments a
+    INNER JOIN leads l
+        ON a.lead_id = l.id
+    WHERE l.assigned_to = ?
+      AND a.appointment_date >= NOW()
+      AND a.status IN ('Scheduled', 'Confirmed')
+    ORDER BY a.appointment_date ASC
+    LIMIT 10
+");
+
+$stmt->execute([
+    $member_id
+]);
+
+$upcoming_appointments = $stmt->fetchAll();
+
+
+$page_title = 'Team Member Profile';
+
+require_once __DIR__ . '/../../includes/header.php';
 
 ?>
 
@@ -216,31 +316,111 @@ require_once __DIR__ . '/../includes/header.php';
         <div>
 
             <h2 class="hm-page-title mb-1">
-                Manager Control Center
+                Team Member Profile
             </h2>
 
             <p class="hm-muted mb-0">
-
-                Monitor marketing activities, leads,
-                follow-ups and team performance.
-
+                View team member information and activity summary.
             </p>
 
         </div>
 
 
         <a
-            href="<?php echo BASE_URL; ?>/leads/add.php"
-            class="btn btn-hm-primary"
+            href="<?php echo BASE_URL; ?>/manager/team/"
+            class="btn btn-outline-secondary"
         >
-            + Add Lead
+            Back to Team
         </a>
 
     </div>
 
 
+    <!-- Profile Card -->
 
-    <!-- KPI Cards -->
+    <div class="hm-card p-4 mb-4">
+
+        <div class="row align-items-center">
+
+            <div class="col-md-8">
+
+                <h3 class="hm-page-title mb-1">
+
+                    <?php
+                    echo htmlspecialchars(
+                        $member['name']
+                    );
+                    ?>
+
+                </h3>
+
+
+                <p class="hm-muted mb-2">
+
+                    <?php
+                    echo htmlspecialchars(
+                        $member['email']
+                    );
+                    ?>
+
+                </p>
+
+
+                <div class="d-flex flex-wrap gap-2">
+
+                    <span class="badge bg-secondary">
+
+                        <?php
+                        echo htmlspecialchars(
+                            $member['role_display_name']
+                        );
+                        ?>
+
+                    </span>
+
+
+                    <span class="badge bg-success">
+
+                        <?php
+                        echo htmlspecialchars(
+                            ucfirst($member['status'])
+                        );
+                        ?>
+
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+
+                <div class="small hm-muted">
+                    Joined
+                </div>
+
+                <strong>
+
+                    <?php
+                    echo date(
+                        'd M Y',
+                        strtotime(
+                            $member['created_at']
+                        )
+                    );
+                    ?>
+
+                </strong>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- Performance Cards -->
 
     <div class="row g-3 mb-4">
 
@@ -252,7 +432,7 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="hm-card p-4 h-100">
 
                 <div class="hm-muted">
-                    Total Leads
+                    Assigned Leads
                 </div>
 
                 <h2 class="mb-0">
@@ -283,18 +463,18 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
 
 
-        <!-- Today's Follow-ups -->
+        <!-- Calls Today -->
 
         <div class="col-md-3">
 
             <div class="hm-card p-4 h-100">
 
                 <div class="hm-muted">
-                    Today's Follow-ups
+                    Calls Today
                 </div>
 
-                <h2 class="mb-0 hm-gold">
-                    <?php echo $today_followups; ?>
+                <h2 class="mb-0">
+                    <?php echo $calls_today; ?>
                 </h2>
 
             </div>
@@ -302,18 +482,18 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
 
 
-        <!-- Overdue -->
+        <!-- Activities Today -->
 
         <div class="col-md-3">
 
             <div class="hm-card p-4 h-100">
 
                 <div class="hm-muted">
-                    Overdue
+                    Activities Today
                 </div>
 
-                <h2 class="mb-0 text-danger">
-                    <?php echo $overdue_followups; ?>
+                <h2 class="mb-0 hm-gold">
+                    <?php echo $activities_today; ?>
                 </h2>
 
             </div>
@@ -323,36 +503,9 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 
 
-
-    <!-- Second KPI Row -->
+    <!-- Second Performance Row -->
 
     <div class="row g-3 mb-4">
-
-
-        <!-- Today's Calls -->
-
-        <div class="col-md-4">
-
-            <div class="hm-card p-4 h-100">
-
-                <div class="hm-muted">
-                    Calls Today
-                </div>
-
-                <h2 class="mb-0">
-                    <?php echo $today_calls; ?>
-                </h2>
-
-                <a
-                    href="<?php echo BASE_URL; ?>/reports/activities.php"
-                    class="small"
-                >
-                    View Activities
-                </a>
-
-            </div>
-
-        </div>
 
 
         <!-- Today's Appointments -->
@@ -366,41 +519,46 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
 
                 <h2 class="mb-0">
-                    <?php echo $today_appointments; ?>
+                    <?php echo $appointments_today; ?>
                 </h2>
-
-                <a
-                    href="<?php echo BASE_URL; ?>/reports/leads.php"
-                    class="small"
-                >
-                    View Leads
-                </a>
 
             </div>
 
         </div>
 
 
-        <!-- Team -->
+        <!-- Active Appointments -->
 
         <div class="col-md-4">
 
             <div class="hm-card p-4 h-100">
 
                 <div class="hm-muted">
-                    Active Marketing Team
+                    Active Appointments
                 </div>
 
                 <h2 class="mb-0">
-                    <?php echo $active_team; ?>
+                    <?php echo $active_appointments; ?>
                 </h2>
 
-                <a
-                    href="<?php echo BASE_URL; ?>/manager/team/"
-                    class="small"
-                >
-                    View Team
-                </a>
+            </div>
+
+        </div>
+
+
+        <!-- Overdue Follow-ups -->
+
+        <div class="col-md-4">
+
+            <div class="hm-card p-4 h-100">
+
+                <div class="hm-muted">
+                    Overdue Follow-ups
+                </div>
+
+                <h2 class="mb-0 text-danger">
+                    <?php echo $overdue_followups; ?>
+                </h2>
 
             </div>
 
@@ -409,97 +567,12 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 
 
-
     <div class="row g-4">
-
-
-        <!-- Team Members -->
-
-        <div class="col-lg-5">
-
-            <div class="hm-card p-4 h-100">
-
-                <div class="d-flex justify-content-between mb-3">
-
-                    <h5 class="mb-0">
-                        Marketing Team
-                    </h5>
-
-                    <a
-                        href="<?php echo BASE_URL; ?>/manager/team/"
-                        class="small"
-                    >
-                        View All
-                    </a>
-
-                </div>
-
-
-                <?php if (empty($team_members)): ?>
-
-                    <div class="alert alert-light">
-                        No active marketing team members.
-                    </div>
-
-                <?php else: ?>
-
-
-                    <?php foreach ($team_members as $member): ?>
-
-                        <div class="border-bottom py-3">
-
-                            <div class="d-flex justify-content-between">
-
-                                <strong>
-
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $member['name']
-                                    );
-                                    ?>
-
-                                </strong>
-
-
-                                <span class="badge bg-secondary">
-
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $member['role_name']
-                                    );
-                                    ?>
-
-                                </span>
-
-                            </div>
-
-
-                            <div class="small hm-muted mt-1">
-
-                                <?php
-                                echo htmlspecialchars(
-                                    $member['email']
-                                );
-                                ?>
-
-                            </div>
-
-                        </div>
-
-                    <?php endforeach; ?>
-
-
-                <?php endif; ?>
-
-            </div>
-
-        </div>
-
 
 
         <!-- Recent Activities -->
 
-        <div class="col-lg-7">
+        <div class="col-lg-6">
 
             <div class="hm-card p-4 h-100">
 
@@ -509,20 +582,13 @@ require_once __DIR__ . '/../includes/header.php';
                         Recent Activities
                     </h5>
 
-                    <a
-                        href="<?php echo BASE_URL; ?>/reports/activities.php"
-                        class="small"
-                    >
-                        View Report
-                    </a>
-
                 </div>
 
 
                 <?php if (empty($recent_activities)): ?>
 
-                    <div class="alert alert-light">
-                        No activities recorded yet.
+                    <div class="alert alert-light mb-0">
+                        No activities found.
                     </div>
 
                 <?php else: ?>
@@ -573,21 +639,10 @@ require_once __DIR__ . '/../includes/header.php';
 
                                 </span>
 
-                                <span class="small hm-muted ms-2">
-
-                                    by
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $activity['user_name']
-                                    );
-                                    ?>
-
-                                </span>
-
                             </div>
 
 
-                            <div class="small mt-2">
+                            <div class="small hm-muted mt-2">
 
                                 <?php
                                 echo htmlspecialchars(
@@ -609,8 +664,109 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
 
 
+        <!-- Upcoming Appointments -->
 
-        <!-- Recent Leads -->
+        <div class="col-lg-6">
+
+            <div class="hm-card p-4 h-100">
+
+                <div class="d-flex justify-content-between mb-3">
+
+                    <h5 class="mb-0">
+                        Upcoming Appointments
+                    </h5>
+
+                </div>
+
+
+                <?php if (empty($upcoming_appointments)): ?>
+
+                    <div class="alert alert-light mb-0">
+                        No upcoming appointments.
+                    </div>
+
+                <?php else: ?>
+
+
+                    <?php foreach ($upcoming_appointments as $appointment): ?>
+
+                        <div class="border-bottom py-3">
+
+                            <div class="d-flex justify-content-between">
+
+                                <strong>
+
+                                    <?php
+                                    echo htmlspecialchars(
+                                        $appointment['lead_name']
+                                    );
+                                    ?>
+
+                                </strong>
+
+
+                                <span class="small">
+
+                                    <?php
+                                    echo date(
+                                        'd M Y, h:i A',
+                                        strtotime(
+                                            $appointment['appointment_date']
+                                        )
+                                    );
+                                    ?>
+
+                                </span>
+
+                            </div>
+
+
+                            <div class="small hm-muted">
+
+                                <?php
+                                echo htmlspecialchars(
+                                    $appointment['lead_phone']
+                                );
+                                ?>
+
+                            </div>
+
+
+                            <div class="mt-2">
+
+                                <span class="badge bg-success">
+
+                                    <?php
+                                    echo htmlspecialchars(
+                                        $appointment['status']
+                                    );
+                                    ?>
+
+                                </span>
+
+
+                                <a
+                                    href="<?php echo BASE_URL; ?>/leads/view.php?id=<?php echo (int) $appointment['lead_id']; ?>"
+                                    class="btn btn-sm btn-outline-secondary ms-2"
+                                >
+                                    View Lead
+                                </a>
+
+                            </div>
+
+                        </div>
+
+                    <?php endforeach; ?>
+
+
+                <?php endif; ?>
+
+            </div>
+
+        </div>
+
+
+        <!-- Recent Assigned Leads -->
 
         <div class="col-12">
 
@@ -619,7 +775,7 @@ require_once __DIR__ . '/../includes/header.php';
                 <div class="d-flex justify-content-between mb-3">
 
                     <h5 class="mb-0">
-                        Recent Leads
+                        Recent Assigned Leads
                     </h5>
 
                     <a
@@ -634,8 +790,8 @@ require_once __DIR__ . '/../includes/header.php';
 
                 <?php if (empty($recent_leads)): ?>
 
-                    <div class="alert alert-light">
-                        No leads found.
+                    <div class="alert alert-light mb-0">
+                        No assigned leads found.
                     </div>
 
                 <?php else: ?>
@@ -670,7 +826,7 @@ require_once __DIR__ . '/../includes/header.php';
                                     </th>
 
                                     <th>
-                                        Assigned To
+                                        Next Action
                                     </th>
 
                                     <th>
@@ -755,12 +911,39 @@ require_once __DIR__ . '/../includes/header.php';
 
                                         <td>
 
-                                            <?php
-                                            echo htmlspecialchars(
-                                                $lead['assigned_name']
-                                                ?: 'Unassigned'
-                                            );
-                                            ?>
+                                            <?php if (!empty($lead['next_action_at'])): ?>
+
+                                                <div>
+
+                                                    <?php
+                                                    echo htmlspecialchars(
+                                                        $lead['next_action_type']
+                                                        ?: 'Action'
+                                                    );
+                                                    ?>
+
+                                                </div>
+
+                                                <small class="hm-muted">
+
+                                                    <?php
+                                                    echo date(
+                                                        'd M Y, h:i A',
+                                                        strtotime(
+                                                            $lead['next_action_at']
+                                                        )
+                                                    );
+                                                    ?>
+
+                                                </small>
+
+                                            <?php else: ?>
+
+                                                <span class="hm-muted">
+                                                    No next action
+                                                </span>
+
+                                            <?php endif; ?>
 
                                         </td>
 
@@ -801,6 +984,6 @@ require_once __DIR__ . '/../includes/header.php';
 
 <?php
 
-require_once __DIR__ . '/../includes/footer.php';
+require_once __DIR__ . '/../../includes/footer.php';
 
 ?>

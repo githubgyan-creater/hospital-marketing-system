@@ -1,4 +1,4 @@
-<?php
+ <?php
 
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/includes/auth.php';
@@ -7,7 +7,6 @@ $page_title = 'Login';
 
 $message = '';
 $message_type = '';
-
 
 /*
 |--------------------------------------------------------------------------
@@ -20,10 +19,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
 
-
     /*
     |--------------------------------------------------------------------------
-    | Basic validation
+    | Basic Validation
     |--------------------------------------------------------------------------
     */
 
@@ -36,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         /*
         |--------------------------------------------------------------------------
-        | Find user
+        | Find User
         |--------------------------------------------------------------------------
         */
 
@@ -61,10 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $user = $stmt->fetch();
 
-
         /*
         |--------------------------------------------------------------------------
-        | Check user and password
+        | Check User and Password
         |--------------------------------------------------------------------------
         */
 
@@ -74,33 +71,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             password_verify($password, $user['password'])
         ) {
 
+            /*
+            |--------------------------------------------------------------------------
+            | Login User
+            |--------------------------------------------------------------------------
+            */
+
             login_user($user);
 
             /*
             |--------------------------------------------------------------------------
-            | Redirect Admin
+            | Role Based Dashboard Redirect
             |--------------------------------------------------------------------------
             */
 
-            if ($user['role_name'] === 'admin') {
+            switch ($user['role_name']) {
 
-                header(
-                    'Location: ' .
-                    BASE_URL .
-                    '/admin/dashboard.php'
-                );
+                case 'admin':
 
-                exit;
+                    header(
+                        'Location: ' .
+                        BASE_URL .
+                        '/admin/dashboard.php'
+                    );
+
+                    exit;
+
+
+                case 'manager':
+
+                    header(
+                        'Location: ' .
+                        BASE_URL .
+                        '/manager/dashboard.php'
+                    );
+
+                    exit;
+
+
+                case 'telecaller':
+
+                    header(
+                        'Location: ' .
+                        BASE_URL .
+                        '/telecaller/dashboard.php'
+                    );
+
+                    exit;
+
+
+                case 'marketing':
+
+                    header(
+                        'Location: ' .
+                        BASE_URL .
+                        '/marketing/dashboard.php'
+                    );
+
+                    exit;
+
+
+                default:
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Unknown Role
+                    |--------------------------------------------------------------------------
+                    */
+
+                    logout_user();
+
+                    $message = 'Your account role is not configured.';
+                    $message_type = 'danger';
+
+                    break;
             }
-
-            /*
-            |--------------------------------------------------------------------------
-            | Other roles will be added later
-            |--------------------------------------------------------------------------
-            */
-
-            $message = 'Login successful, but this role dashboard is not ready yet.';
-            $message_type = 'success';
 
         } else {
 
@@ -109,7 +154,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
-
 
 require_once __DIR__ . '/includes/header.php';
 
@@ -145,7 +189,9 @@ require_once __DIR__ . '/includes/header.php';
                     <div
                         class="alert alert-<?php echo htmlspecialchars($message_type); ?>"
                     >
+
                         <?php echo htmlspecialchars($message); ?>
+
                     </div>
 
                 <?php endif; ?>
@@ -208,8 +254,10 @@ require_once __DIR__ . '/includes/header.php';
                 <div class="text-center mt-4">
 
                     <small class="hm-muted">
+
                         Administrator setup is available only
                         during initial system configuration.
+
                     </small>
 
                 </div>
@@ -221,7 +269,6 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 
 </div>
-
 
 <?php
 
