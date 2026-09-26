@@ -177,6 +177,38 @@ $today_activities = $stmt->fetchAll();
 
 /*
 |--------------------------------------------------------------------------
+| Assigned Events
+|--------------------------------------------------------------------------
+*/
+
+$stmt = $pdo->prepare("
+    SELECT
+        ea.id AS assignment_id,
+        e.id AS event_id,
+        e.event_name,
+        e.event_type,
+        e.event_date,
+        e.location,
+        e.description,
+        e.status
+    FROM event_assignments ea
+    INNER JOIN events e
+        ON ea.event_id = e.id
+    WHERE ea.user_id = ?
+      AND e.status <> 'Cancelled'
+    ORDER BY
+        e.event_date ASC,
+        e.id ASC
+    LIMIT 10
+");
+
+$stmt->execute([$user_id]);
+
+$assigned_events = $stmt->fetchAll();
+
+
+/*
+|--------------------------------------------------------------------------
 | Performance Counts
 |--------------------------------------------------------------------------
 */
@@ -237,8 +269,12 @@ require_once __DIR__ . '/../includes/header.php';
             </h2>
 
             <p class="hm-muted mb-0">
-                Welcome, <?php echo htmlspecialchars($user['name']); ?>.
+
+                Welcome,
+                <?php echo htmlspecialchars($user['name']); ?>.
+
                 Here is your telecaller work for today.
+
             </p>
 
         </div>
@@ -409,11 +445,13 @@ require_once __DIR__ . '/../includes/header.php';
                                 <div>
 
                                     <strong>
+
                                         <?php
                                         echo htmlspecialchars(
                                             $lead['name']
                                         );
                                         ?>
+
                                     </strong>
 
                                     <div class="small hm-muted">
@@ -428,16 +466,17 @@ require_once __DIR__ . '/../includes/header.php';
 
                                 </div>
 
-
                                 <span class="small">
 
                                     <?php
+
                                     echo date(
                                         'h:i A',
                                         strtotime(
                                             $lead['next_action_at']
                                         )
                                     );
+
                                     ?>
 
                                 </span>
@@ -514,25 +553,26 @@ require_once __DIR__ . '/../includes/header.php';
                             </strong>
 
                             <div class="small hm-muted">
-
                                 <?php
                                 echo htmlspecialchars(
                                     $lead['phone']
                                 );
                                 ?>
-
                             </div>
 
                             <div class="small text-danger mt-1">
 
                                 Due:
+
                                 <?php
+
                                 echo date(
                                     'd M Y, h:i A',
                                     strtotime(
                                         $lead['next_action_at']
                                     )
                                 );
+
                                 ?>
 
                             </div>
@@ -607,24 +647,20 @@ require_once __DIR__ . '/../includes/header.php';
                             </strong>
 
                             <div class="small hm-muted">
-
                                 <?php
                                 echo htmlspecialchars(
                                     $lead['phone']
                                 );
                                 ?>
-
                             </div>
 
                             <div class="small mt-1">
-
                                 <?php
                                 echo htmlspecialchars(
                                     $lead['service_interest']
                                     ?: 'No service specified'
                                 );
                                 ?>
-
                             </div>
 
 
@@ -691,24 +727,24 @@ require_once __DIR__ . '/../includes/header.php';
                             <div class="d-flex justify-content-between">
 
                                 <strong>
-
                                     <?php
                                     echo htmlspecialchars(
                                         $appointment['lead_name']
                                     );
                                     ?>
-
                                 </strong>
 
                                 <span class="small">
 
                                     <?php
+
                                     echo date(
                                         'h:i A',
                                         strtotime(
                                             $appointment['appointment_date']
                                         )
                                     );
+
                                     ?>
 
                                 </span>
@@ -717,26 +753,22 @@ require_once __DIR__ . '/../includes/header.php';
 
 
                             <div class="small hm-muted">
-
                                 <?php
                                 echo htmlspecialchars(
                                     $appointment['lead_phone']
                                 );
                                 ?>
-
                             </div>
 
 
                             <div class="mt-2">
 
                                 <span class="badge bg-success">
-
                                     <?php
                                     echo htmlspecialchars(
                                         $appointment['status']
                                     );
                                     ?>
-
                                 </span>
 
 
@@ -752,6 +784,220 @@ require_once __DIR__ . '/../includes/header.php';
                         </div>
 
                     <?php endforeach; ?>
+
+                <?php endif; ?>
+
+            </div>
+
+        </div>
+
+
+        <!-- Assigned Events -->
+
+        <div class="col-12">
+
+            <div class="hm-card p-4">
+
+                <div class="d-flex justify-content-between align-items-center mb-3">
+
+                    <div>
+
+                        <h5 class="mb-1">
+                            Assigned Events
+                        </h5>
+
+                        <span class="hm-muted">
+                            Events assigned to you by the manager.
+                        </span>
+
+                    </div>
+
+                    <span class="badge bg-primary">
+                        <?php echo count($assigned_events); ?>
+                    </span>
+
+                </div>
+
+
+                <?php if (empty($assigned_events)): ?>
+
+                    <div class="alert alert-light mb-0">
+
+                        No events are currently assigned to you.
+
+                    </div>
+
+                <?php else: ?>
+
+                    <div class="table-responsive">
+
+                        <table class="table align-middle mb-0">
+
+                            <thead>
+
+                                <tr>
+
+                                    <th>
+                                        Event
+                                    </th>
+
+                                    <th>
+                                        Type
+                                    </th>
+
+                                    <th>
+                                        Date
+                                    </th>
+
+                                    <th>
+                                        Location
+                                    </th>
+
+                                    <th>
+                                        Status
+                                    </th>
+
+                                    <th>
+                                        Action
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+                            <tbody>
+
+                                <?php foreach ($assigned_events as $event): ?>
+
+                                    <tr>
+
+                                        <td>
+
+                                            <strong>
+
+                                                <?php
+
+                                                echo htmlspecialchars(
+                                                    $event['event_name']
+                                                );
+
+                                                ?>
+
+                                            </strong>
+
+                                        </td>
+
+
+                                        <td>
+
+                                            <?php
+
+                                            echo htmlspecialchars(
+                                                $event['event_type']
+                                            );
+
+                                            ?>
+
+                                        </td>
+
+
+                                        <td>
+
+                                            <?php
+
+                                            echo date(
+                                                'd M Y',
+                                                strtotime(
+                                                    $event['event_date']
+                                                )
+                                            );
+
+                                            ?>
+
+                                        </td>
+
+
+                                        <td>
+
+                                            <?php
+
+                                            echo htmlspecialchars(
+                                                $event['location']
+                                                ?: '-'
+                                            );
+
+                                            ?>
+
+                                        </td>
+
+
+                                        <td>
+
+                                            <?php
+
+                                            $event_status =
+                                                $event['status'];
+
+                                            $event_badge =
+                                                'bg-primary';
+
+                                            if (
+                                                $event_status
+                                                === 'Ongoing'
+                                            ) {
+
+                                                $event_badge =
+                                                    'bg-warning text-dark';
+
+                                            } elseif (
+                                                $event_status
+                                                === 'Completed'
+                                            ) {
+
+                                                $event_badge =
+                                                    'bg-success';
+
+                                            }
+
+                                            ?>
+
+                                            <span
+                                                class="badge <?php echo $event_badge; ?>"
+                                            >
+
+                                                <?php
+
+                                                echo htmlspecialchars(
+                                                    $event_status
+                                                );
+
+                                                ?>
+
+                                            </span>
+
+                                        </td>
+
+
+                                        <td>
+
+                                            <a
+                                                href="<?php echo BASE_URL; ?>/events/capture-lead.php?event_id=<?php echo (int) $event['event_id']; ?>"
+                                                class="btn btn-sm btn-hm-primary"
+                                            >
+                                                Capture Lead
+                                            </a>
+
+                                        </td>
+
+                                    </tr>
+
+                                <?php endforeach; ?>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
 
                 <?php endif; ?>
 
@@ -795,31 +1041,39 @@ require_once __DIR__ . '/../includes/header.php';
                         <div class="border-bottom py-3">
 
                             <strong>
+
                                 <?php
+
                                 echo htmlspecialchars(
                                     $lead['name']
                                 );
+
                                 ?>
+
                             </strong>
 
                             <div class="small hm-muted">
 
                                 <?php
+
                                 echo htmlspecialchars(
                                     $lead['next_action_type']
                                     ?: 'Follow-up'
                                 );
+
                                 ?>
 
                                 ·
 
                                 <?php
+
                                 echo date(
                                     'd M Y, h:i A',
                                     strtotime(
                                         $lead['next_action_at']
                                     )
                                 );
+
                                 ?>
 
                             </div>
@@ -857,7 +1111,9 @@ require_once __DIR__ . '/../includes/header.php';
                 <?php if (empty($today_activities)): ?>
 
                     <div class="alert alert-light mb-0">
+
                         No activities recorded today.
+
                     </div>
 
                 <?php else: ?>
@@ -869,22 +1125,28 @@ require_once __DIR__ . '/../includes/header.php';
                             <div class="d-flex justify-content-between">
 
                                 <strong>
+
                                     <?php
+
                                     echo htmlspecialchars(
                                         $activity['lead_name']
                                     );
+
                                     ?>
+
                                 </strong>
 
                                 <span class="small hm-muted">
 
                                     <?php
+
                                     echo date(
                                         'h:i A',
                                         strtotime(
                                             $activity['activity_at']
                                         )
                                     );
+
                                     ?>
 
                                 </span>
@@ -897,9 +1159,11 @@ require_once __DIR__ . '/../includes/header.php';
                                 <span class="badge bg-secondary">
 
                                     <?php
+
                                     echo htmlspecialchars(
                                         $activity['activity_type']
                                     );
+
                                     ?>
 
                                 </span>
@@ -910,9 +1174,11 @@ require_once __DIR__ . '/../includes/header.php';
                             <div class="small hm-muted mt-1">
 
                                 <?php
+
                                 echo htmlspecialchars(
                                     $activity['description']
                                 );
+
                                 ?>
 
                             </div>

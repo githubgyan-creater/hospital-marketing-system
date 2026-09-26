@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             /*
             |--------------------------------------------------------------------------
-            | Check Staff
+            | Check Staff Role
             |--------------------------------------------------------------------------
             */
 
@@ -69,9 +69,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     u.email,
                     u.status,
                     r.name AS role_name
+
                 FROM users u
+
                 INNER JOIN roles r
                     ON u.role_id = r.id
+
                 WHERE u.id = ?
                   AND u.status = 'active'
                   AND LOWER(r.name) IN (
@@ -79,6 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       'marketing executive',
                       'marketing'
                   )
+
                 LIMIT 1
             ");
 
@@ -103,9 +107,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $stmt = $pdo->prepare("
                     SELECT id
+
                     FROM event_assignments
+
                     WHERE event_id = ?
                       AND user_id = ?
+
                     LIMIT 1
                 ");
 
@@ -136,7 +143,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             user_id,
                             assigned_by
                         )
-                        VALUES (?, ?, ?)
+
+                        VALUES
+                        (?, ?, ?)
                     ");
 
                     $stmt->execute([
@@ -175,6 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $stmt = $pdo->prepare("
                 DELETE FROM event_assignments
+
                 WHERE id = ?
                   AND event_id = ?
             ");
@@ -253,7 +263,9 @@ if (!$event) {
 
 $stmt = $pdo->prepare("
     SELECT COUNT(*)
+
     FROM event_assignments
+
     WHERE event_id = ?
 ");
 
@@ -270,7 +282,9 @@ $assigned_staff_count = (int) $stmt->fetchColumn();
 
 $stmt = $pdo->prepare("
     SELECT COUNT(*)
+
     FROM event_leads
+
     WHERE event_id = ?
 ");
 
@@ -282,12 +296,7 @@ $leads_generated_count = (int) $stmt->fetchColumn();
 
 
 /*
-| Appointments
-|
-| Based on the current database structure,
-| appointments are connected to events through:
-|
-| event_leads -> lead_id -> appointments.lead_id
+| Total Appointments
 */
 
 $stmt = $pdo->prepare("
@@ -306,6 +315,68 @@ $stmt->execute([
 ]);
 
 $appointments_count = (int) $stmt->fetchColumn();
+
+
+/*
+| Completed Appointments
+*/
+
+$stmt = $pdo->prepare("
+    SELECT COUNT(DISTINCT a.id)
+
+    FROM appointments a
+
+    INNER JOIN event_leads el
+        ON a.lead_id = el.lead_id
+
+    WHERE el.event_id = ?
+      AND a.status = 'Completed'
+");
+
+$stmt->execute([
+    $event_id
+]);
+
+$completed_appointments_count = (int) $stmt->fetchColumn();
+
+
+/*
+| Converted Leads
+*/
+
+$stmt = $pdo->prepare("
+    SELECT COUNT(DISTINCT l.id)
+
+    FROM event_leads el
+
+    INNER JOIN leads l
+        ON el.lead_id = l.id
+
+    WHERE el.event_id = ?
+      AND l.status = 'Converted'
+");
+
+$stmt->execute([
+    $event_id
+]);
+
+$converted_leads_count = (int) $stmt->fetchColumn();
+
+
+/*
+| Conversion Rate
+|
+| Formula:
+| Converted Leads / Total Event Leads * 100
+*/
+
+$conversion_rate = 0;
+
+if ($leads_generated_count > 0) {
+
+    $conversion_rate =
+        ($converted_leads_count / $leads_generated_count) * 100;
+}
 
 
 /*
@@ -430,19 +501,6 @@ $event_leads = $stmt->fetchAll();
 |--------------------------------------------------------------------------
 | Get Event Appointments
 |--------------------------------------------------------------------------
-|
-| Current appointment structure from telecaller/appointments/index.php:
-|
-| appointments
-| - id
-| - lead_id
-| - appointment_date
-| - appointment_type
-| - notes
-| - status
-| - created_at
-|
-|--------------------------------------------------------------------------
 */
 
 $stmt = $pdo->prepare("
@@ -451,7 +509,6 @@ $stmt = $pdo->prepare("
         a.id AS appointment_id,
 
         a.lead_id,
-
         a.appointment_date,
         a.appointment_type,
         a.notes,
@@ -472,7 +529,9 @@ $stmt = $pdo->prepare("
 
     WHERE el.event_id = ?
 
-    ORDER BY a.appointment_date ASC, a.id ASC
+    ORDER BY
+        a.appointment_date ASC,
+        a.id ASC
 ");
 
 $stmt->execute([
@@ -578,15 +637,6 @@ function appointment_status_class(string $status): string
     }
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| Page
-|--------------------------------------------------------------------------
-*/
-
-$page_title = 'Event Details';
-
 ?>
 
 <!DOCTYPE html>
@@ -602,7 +652,11 @@ $page_title = 'Event Details';
     >
 
     <title>
-        <?php echo htmlspecialchars($event['event_name']); ?>
+        <?php
+        echo htmlspecialchars(
+            $event['event_name']
+        );
+        ?>
         - Event Details
     </title>
 
@@ -782,13 +836,12 @@ $page_title = 'Event Details';
             Event Performance
         </h4>
 
-
         <div class="row g-3">
 
 
             <!-- Assigned Staff -->
 
-            <div class="col-md-4">
+            <div class="col-md-6 col-xl">
 
                 <div class="hm-card p-4 h-100">
 
@@ -797,15 +850,11 @@ $page_title = 'Event Details';
                     </div>
 
                     <div class="performance-value">
-
-                        <?php
-                        echo $assigned_staff_count;
-                        ?>
-
+                        <?php echo $assigned_staff_count; ?>
                     </div>
 
                     <div class="small hm-muted mt-1">
-                        Staff members assigned to this event
+                        Staff assigned to this event
                     </div>
 
                 </div>
@@ -815,7 +864,7 @@ $page_title = 'Event Details';
 
             <!-- Leads Generated -->
 
-            <div class="col-md-4">
+            <div class="col-md-6 col-xl">
 
                 <div class="hm-card p-4 h-100">
 
@@ -824,15 +873,11 @@ $page_title = 'Event Details';
                     </div>
 
                     <div class="performance-value">
-
-                        <?php
-                        echo $leads_generated_count;
-                        ?>
-
+                        <?php echo $leads_generated_count; ?>
                     </div>
 
                     <div class="small hm-muted mt-1">
-                        Leads captured through this event
+                        Leads captured from event
                     </div>
 
                 </div>
@@ -842,7 +887,7 @@ $page_title = 'Event Details';
 
             <!-- Appointments -->
 
-            <div class="col-md-4">
+            <div class="col-md-6 col-xl">
 
                 <div class="hm-card p-4 h-100">
 
@@ -851,15 +896,87 @@ $page_title = 'Event Details';
                     </div>
 
                     <div class="performance-value">
+                        <?php echo $appointments_count; ?>
+                    </div>
+
+                    <div class="small hm-muted mt-1">
+                        Appointments from event leads
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Completed Appointments -->
+
+            <div class="col-md-6 col-xl">
+
+                <div class="hm-card p-4 h-100">
+
+                    <div class="performance-label">
+                        Completed Appointments
+                    </div>
+
+                    <div class="performance-value">
+                        <?php echo $completed_appointments_count; ?>
+                    </div>
+
+                    <div class="small hm-muted mt-1">
+                        Completed event appointments
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Converted Leads -->
+
+            <div class="col-md-6 col-xl">
+
+                <div class="hm-card p-4 h-100">
+
+                    <div class="performance-label">
+                        Converted Leads
+                    </div>
+
+                    <div class="performance-value">
+                        <?php echo $converted_leads_count; ?>
+                    </div>
+
+                    <div class="small hm-muted mt-1">
+                        Leads marked as converted
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Conversion Rate -->
+
+            <div class="col-md-6 col-xl">
+
+                <div class="hm-card p-4 h-100">
+
+                    <div class="performance-label">
+                        Conversion Rate
+                    </div>
+
+                    <div class="performance-value">
 
                         <?php
-                        echo $appointments_count;
-                        ?>
+                        echo number_format(
+                            $conversion_rate,
+                            1
+                        );
+                        ?>%
 
                     </div>
 
                     <div class="small hm-muted mt-1">
-                        Appointments linked to event leads
+                        Converted leads ÷ total event leads
                     </div>
 
                 </div>
@@ -956,7 +1073,9 @@ $page_title = 'Event Details';
                     <?php
                     echo date(
                         'd M Y',
-                        strtotime($event['event_date'])
+                        strtotime(
+                            $event['event_date']
+                        )
                     );
                     ?>
 
@@ -1033,7 +1152,9 @@ $page_title = 'Event Details';
                     <?php
                     echo date(
                         'd M Y, h:i A',
-                        strtotime($event['created_at'])
+                        strtotime(
+                            $event['created_at']
+                        )
                     );
                     ?>
 
@@ -1082,7 +1203,7 @@ $page_title = 'Event Details';
 
 
     <!-- ========================================================= -->
-    <!-- EVENT STAFF -->
+    <!-- STAFF ASSIGNMENT -->
     <!-- ========================================================= -->
 
     <div class="hm-card p-4 mb-4">
@@ -1104,7 +1225,7 @@ $page_title = 'Event Details';
         </div>
 
 
-        <!-- Assign Staff -->
+        <!-- Assign Staff Form -->
 
         <form
             method="POST"
@@ -1147,6 +1268,7 @@ $page_title = 'Event Details';
                             ?>
 
                             -
+
                             <?php
                             echo htmlspecialchars(
                                 $staff_member['role_name']
@@ -1189,13 +1311,9 @@ $page_title = 'Event Details';
                         <tr>
 
                             <th>Staff</th>
-
                             <th>Role</th>
-
                             <th>Assigned By</th>
-
                             <th>Assigned On</th>
-
                             <th>Action</th>
 
                         </tr>
@@ -1391,6 +1509,8 @@ $page_title = 'Event Details';
 
                         <tr>
 
+                            <!-- Lead -->
+
                             <td>
 
                                 <div class="fw-semibold">
@@ -1420,6 +1540,8 @@ $page_title = 'Event Details';
                             </td>
 
 
+                            <!-- Phone -->
+
                             <td>
 
                                 <?php
@@ -1430,6 +1552,8 @@ $page_title = 'Event Details';
 
                             </td>
 
+
+                            <!-- Service -->
 
                             <td>
 
@@ -1442,6 +1566,8 @@ $page_title = 'Event Details';
 
                             </td>
 
+
+                            <!-- Status -->
 
                             <td>
 
@@ -1460,6 +1586,8 @@ $page_title = 'Event Details';
                             </td>
 
 
+                            <!-- Priority -->
+
                             <td>
 
                                 <span
@@ -1477,6 +1605,8 @@ $page_title = 'Event Details';
                             </td>
 
 
+                            <!-- Captured By -->
+
                             <td>
 
                                 <?php
@@ -1488,6 +1618,8 @@ $page_title = 'Event Details';
 
                             </td>
 
+
+                            <!-- Captured On -->
 
                             <td>
 
@@ -1502,6 +1634,8 @@ $page_title = 'Event Details';
 
                             </td>
 
+
+                            <!-- Action -->
 
                             <td>
 
@@ -1582,17 +1716,11 @@ $page_title = 'Event Details';
                         <tr>
 
                             <th>Lead</th>
-
                             <th>Phone</th>
-
                             <th>Service</th>
-
                             <th>Date & Time</th>
-
                             <th>Type</th>
-
                             <th>Status</th>
-
                             <th>Action</th>
 
                         </tr>
@@ -1605,7 +1733,6 @@ $page_title = 'Event Details';
                     <?php foreach ($event_appointments as $appointment): ?>
 
                         <tr>
-
 
                             <!-- Lead -->
 
@@ -1651,17 +1778,15 @@ $page_title = 'Event Details';
                             </td>
 
 
-                            <!-- Appointment Date -->
+                            <!-- Date -->
 
                             <td>
 
                                 <?php
 
-                                if (
-                                    !empty(
-                                        $appointment['appointment_date']
-                                    )
-                                ) {
+                                if (!empty(
+                                    $appointment['appointment_date']
+                                )) {
 
                                     echo date(
                                         'd M Y, h:i A',
@@ -1681,7 +1806,7 @@ $page_title = 'Event Details';
                             </td>
 
 
-                            <!-- Appointment Type -->
+                            <!-- Type -->
 
                             <td>
 
@@ -1695,7 +1820,7 @@ $page_title = 'Event Details';
                             </td>
 
 
-                            <!-- Appointment Status -->
+                            <!-- Status -->
 
                             <td>
 

@@ -248,7 +248,9 @@ $staff_members = $stmt->fetchAll();
 */
 
 $sql = "
+
     SELECT
+
         l.id,
         l.name,
         l.phone,
@@ -265,6 +267,10 @@ $sql = "
 
         c.name AS campaign_name,
 
+        ref.name AS referral_name,
+        ref.referral_type AS referral_type,
+        ref.organization AS referral_organization,
+
         u.name AS assigned_name,
 
         r.name AS assigned_role
@@ -277,6 +283,9 @@ $sql = "
     LEFT JOIN campaigns c
         ON l.campaign_id = c.id
 
+    LEFT JOIN referrals ref
+        ON l.referral_id = ref.id
+
     LEFT JOIN users u
         ON l.assigned_to = u.id
 
@@ -284,6 +293,7 @@ $sql = "
         ON u.role_id = r.id
 
     WHERE 1 = 1
+
 ";
 
 $params = [];
@@ -297,11 +307,17 @@ $params = [];
 if ($search !== '') {
 
     $sql .= "
+
         AND (
+
             l.name LIKE ?
+
             OR l.phone LIKE ?
+
             OR l.email LIKE ?
+
         )
+
     ";
 
     $params[] = '%' . $search . '%';
@@ -318,7 +334,9 @@ if ($search !== '') {
 if ($status_filter !== '') {
 
     $sql .= "
+
         AND l.status = ?
+
     ";
 
     $params[] = $status_filter;
@@ -340,7 +358,9 @@ if (
 ) {
 
     $sql .= "
+
         AND l.priority = ?
+
     ";
 
     $params[] = $priority_filter;
@@ -355,13 +375,17 @@ if (
 if ($assignment_filter === 'unassigned') {
 
     $sql .= "
+
         AND l.assigned_to IS NULL
+
     ";
 
 } elseif ($assignment_filter === 'assigned') {
 
     $sql .= "
+
         AND l.assigned_to IS NOT NULL
+
     ";
 }
 
@@ -372,7 +396,9 @@ if ($assignment_filter === 'unassigned') {
 */
 
 $sql .= "
+
     ORDER BY l.created_at DESC
+
 ";
 
 $stmt = $pdo->prepare($sql);
@@ -389,6 +415,7 @@ $leads = $stmt->fetchAll();
 
 $stmt = $pdo->query("
     SELECT
+
         COUNT(*) AS total_leads,
 
         SUM(status = 'New') AS new_leads,
@@ -662,7 +689,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         <?php foreach (['Low', 'Medium', 'High'] as $priority): ?>
 
                             <option
-                                value="<?php echo $priority; ?>"
+                                value="<?php echo htmlspecialchars($priority); ?>"
                                 <?php
                                 echo $priority_filter === $priority
                                     ? 'selected'
@@ -671,7 +698,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             >
 
                                 <?php
-                                echo $priority;
+                                echo htmlspecialchars($priority);
                                 ?>
 
                             </option>
@@ -800,6 +827,10 @@ require_once __DIR__ . '/../../includes/header.php';
                             </th>
 
                             <th>
+                                Referral Partner
+                            </th>
+
+                            <th>
                                 Status
                             </th>
 
@@ -836,9 +867,11 @@ require_once __DIR__ . '/../../includes/header.php';
                                     <strong>
 
                                         <?php
+
                                         echo htmlspecialchars(
                                             $lead['name']
                                         );
+
                                         ?>
 
                                     </strong>
@@ -852,9 +885,11 @@ require_once __DIR__ . '/../../includes/header.php';
                                     <div>
 
                                         <?php
+
                                         echo htmlspecialchars(
                                             $lead['phone']
                                         );
+
                                         ?>
 
                                     </div>
@@ -864,9 +899,11 @@ require_once __DIR__ . '/../../includes/header.php';
                                         <small class="hm-muted">
 
                                             <?php
+
                                             echo htmlspecialchars(
                                                 $lead['email']
                                             );
+
                                             ?>
 
                                         </small>
@@ -880,10 +917,12 @@ require_once __DIR__ . '/../../includes/header.php';
                                 <td>
 
                                     <?php
+
                                     echo htmlspecialchars(
                                         $lead['service_interest']
                                         ?: '-'
                                     );
+
                                     ?>
 
                                 </td>
@@ -895,12 +934,84 @@ require_once __DIR__ . '/../../includes/header.php';
                                     <?php if (!empty($lead['campaign_name'])): ?>
 
                                         <span>
+
                                             <?php
+
                                             echo htmlspecialchars(
                                                 $lead['campaign_name']
                                             );
+
                                             ?>
+
                                         </span>
+
+                                    <?php else: ?>
+
+                                        <span class="hm-muted">
+                                            -
+                                        </span>
+
+                                    <?php endif; ?>
+
+                                </td>
+
+                                <!-- Referral Partner -->
+
+                                <td style="min-width: 180px;">
+
+                                    <?php if (!empty($lead['referral_name'])): ?>
+
+                                        <div>
+
+                                            <strong>
+
+                                                <?php
+
+                                                echo htmlspecialchars(
+                                                    $lead['referral_name']
+                                                );
+
+                                                ?>
+
+                                            </strong>
+
+                                        </div>
+
+                                        <?php if (!empty($lead['referral_type'])): ?>
+
+                                            <small class="hm-muted">
+
+                                                <?php
+
+                                                echo htmlspecialchars(
+                                                    $lead['referral_type']
+                                                );
+
+                                                ?>
+
+                                            </small>
+
+                                        <?php endif; ?>
+
+                                        <?php if (!empty($lead['referral_organization'])): ?>
+
+                                            <div>
+
+                                                <small class="hm-muted">
+
+                                                    <?php
+
+                                                    echo htmlspecialchars(
+                                                        $lead['referral_organization']
+                                                    );
+
+                                                    ?>
+
+                                                </small>
+
+                                            </div>
+
+                                        <?php endif; ?>
 
                                     <?php else: ?>
 
@@ -919,9 +1030,11 @@ require_once __DIR__ . '/../../includes/header.php';
                                     <span class="badge bg-secondary">
 
                                         <?php
+
                                         echo htmlspecialchars(
                                             $lead['status']
                                         );
+
                                         ?>
 
                                     </span>
@@ -933,9 +1046,11 @@ require_once __DIR__ . '/../../includes/header.php';
                                 <td>
 
                                     <?php
+
                                     echo htmlspecialchars(
                                         $lead['priority']
                                     );
+
                                     ?>
 
                                 </td>
@@ -959,9 +1074,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                         >
 
                                             <option value="0">
-
                                                 Unassigned
-
                                             </option>
 
                                             <?php foreach ($staff_members as $staff): ?>
@@ -977,19 +1090,23 @@ require_once __DIR__ . '/../../includes/header.php';
                                                 >
 
                                                     <?php
+
                                                     echo htmlspecialchars(
                                                         $staff['name']
                                                     );
+
                                                     ?>
 
                                                     -
 
                                                     <?php
+
                                                     echo htmlspecialchars(
                                                         ucfirst(
                                                             $staff['role_name']
                                                         )
                                                     );
+
                                                     ?>
 
                                                 </option>
@@ -1011,10 +1128,12 @@ require_once __DIR__ . '/../../includes/header.php';
                                         <div>
 
                                             <?php
+
                                             echo htmlspecialchars(
                                                 $lead['next_action_type']
                                                 ?: 'Action'
                                             );
+
                                             ?>
 
                                         </div>
@@ -1022,12 +1141,14 @@ require_once __DIR__ . '/../../includes/header.php';
                                         <small class="hm-muted">
 
                                             <?php
+
                                             echo date(
                                                 'd M Y, h:i A',
                                                 strtotime(
                                                     $lead['next_action_at']
                                                 )
                                             );
+
                                             ?>
 
                                         </small>

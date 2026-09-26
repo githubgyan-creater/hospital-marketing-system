@@ -1,4 +1,4 @@
-<?php
+ <?php
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/role_check.php';
@@ -10,23 +10,43 @@ require_role(
     'marketing'
 );
 
-$page_title = 'Lead Details';
 
-$lead_id = (int) ($_GET['id'] ?? 0);
+ $lead_id = filter_input(
+    INPUT_GET,
+    'id',
+    FILTER_VALIDATE_INT
+);
 
-if ($lead_id <= 0) {
+if ($lead_id === false || $lead_id === null || $lead_id <= 0) {
     exit('Invalid lead ID.');
 }
 
+/*
+|--------------------------------------------------------------------------
+| Get Lead Details
+|--------------------------------------------------------------------------
+*/
+
 $stmt = $pdo->prepare("
     SELECT
+
         l.*,
 
         ms.name AS source_name,
 
         assigned.name AS assigned_name,
 
-        creator.name AS creator_name
+        creator.name AS creator_name,
+
+        ref.name AS referral_name,
+
+        ref.referral_type AS referral_type,
+
+        ref.organization AS referral_organization,
+
+        ref.phone AS referral_phone,
+
+        ref.email AS referral_email
 
     FROM leads l
 
@@ -38,6 +58,9 @@ $stmt = $pdo->prepare("
 
     LEFT JOIN users creator
         ON l.created_by = creator.id
+
+    LEFT JOIN referrals ref
+        ON l.referral_id = ref.id
 
     WHERE l.id = :id
 
@@ -60,6 +83,8 @@ require_once __DIR__ . '/../includes/header.php';
 
 <div class="container py-4">
 
+    <!-- Page Header -->
+
     <div class="mb-4">
 
         <a
@@ -69,232 +94,489 @@ require_once __DIR__ . '/../includes/header.php';
             ← Back to Leads
         </a>
 
-         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
 
-    <div>
+            <div>
 
-        <h1 class="hm-page-title mt-3 mb-1">
-            Lead Details
-        </h1>
+                <h1 class="hm-page-title mt-3 mb-1">
+                    Lead Details
+                </h1>
 
-        <p class="hm-muted">
-            View complete information about this enquiry.
-        </p>
+                <p class="hm-muted">
+                    View complete information about this enquiry.
+                </p>
 
-    </div>
+            </div>
 
-    <!-- <a
-        href="<?php echo BASE_URL; ?>/leads/edit.php?id=<?php echo $lead_id; ?>"
-        class="btn btn-hm-primary"
-    >
-        Edit Lead
-    </a> -->
-    <div class="d-flex gap-2 flex-wrap">
+            <div class="d-flex gap-2 flex-wrap">
 
-    <a
-        href="<?php echo BASE_URL; ?>/leads/timeline.php?id=<?php echo $lead_id; ?>"
-        class="btn btn-outline-secondary"
-    >
-        Activity Timeline
-    </a>
+                <a
+                    href="<?php echo BASE_URL; ?>/leads/timeline.php?id=<?php echo $lead_id; ?>"
+                    class="btn btn-outline-secondary"
+                >
+                    Activity Timeline
+                </a>
 
-    <a
-        href="<?php echo BASE_URL; ?>/leads/edit.php?id=<?php echo $lead_id; ?>"
-        class="btn btn-hm-primary"
-    >
-        Edit Lead
-    </a>
+                <a
+                    href="<?php echo BASE_URL; ?>/leads/edit.php?id=<?php echo $lead_id; ?>"
+                    class="btn btn-hm-primary"
+                >
+                    Edit Lead
+                </a>
 
-</div>
+            </div>
 
-</div>
-        <!-- <p class="hm-muted">
-            View complete information about this enquiry.
-        </p> -->
+        </div>
 
     </div>
 
+    <!-- Lead Information -->
 
     <div class="hm-card p-4">
 
-         <div class="row g-4">
+        <div class="row g-4">
 
-    <!-- Name -->
-    <div class="col-md-6">
-        <small class="text-muted">Name</small>
-        <h5>
-            <?php echo htmlspecialchars($lead['name']); ?>
-        </h5>
-    </div>
+            <!-- Name -->
 
-    <!-- Phone -->
-    <div class="col-md-6">
-        <small class="text-muted">Phone</small>
-        <h5>
-            <?php echo htmlspecialchars($lead['phone']); ?>
-        </h5>
-    </div>
+            <div class="col-md-6">
 
-    <!-- Email -->
-    <div class="col-md-6">
-        <small class="text-muted">Email</small>
-        <h5>
-            <?php echo htmlspecialchars($lead['email'] ?? '-'); ?>
-        </h5>
-    </div>
+                <small class="text-muted">
+                    Name
+                </small>
 
-    <!-- Service Interest -->
-    <div class="col-md-6">
-        <small class="text-muted">Service Interest</small>
-        <h5>
-            <?php echo htmlspecialchars($lead['service_interest'] ?? '-'); ?>
-        </h5>
-    </div>
+                <h5>
 
-    <!-- Source -->
-    <div class="col-md-6">
-        <small class="text-muted">Source</small>
-        <h5>
-            <?php echo htmlspecialchars($lead['source_name'] ?? '-'); ?>
-        </h5>
-    </div>
+                    <?php
 
-    <!-- Status -->
-    <div class="col-md-6">
-        <small class="text-muted">Status</small>
-        <h5>
-            <?php echo htmlspecialchars($lead['status']); ?>
-        </h5>
-    </div>
+                    echo htmlspecialchars(
+                        $lead['name']
+                    );
 
-    <!-- Priority -->
-    <div class="col-md-6">
-        <small class="text-muted">Priority</small>
-        <h5>
-            <?php echo htmlspecialchars($lead['priority']); ?>
-        </h5>
-    </div>
+                    ?>
 
-    <!-- Assigned To -->
-    <div class="col-md-6">
-        <small class="text-muted">Assigned To</small>
-        <h5>
-            <?php
-            echo htmlspecialchars(
-                $lead['assigned_name'] ?? 'Not Assigned'
-            );
-            ?>
-        </h5>
-    </div>
+                </h5>
 
-       <!-- Next Action -->
+            </div>
 
-<div class="col-md-6">
+            <!-- Phone -->
 
-    <small class="text-muted">
-        Next Action
-    </small>
+            <div class="col-md-6">
 
-    <h5>
-        <?php
-        echo htmlspecialchars(
-            $lead['next_action_type']
-            ?? 'Not Scheduled'
-        );
-        ?>
-    </h5>
+                <small class="text-muted">
+                    Phone
+                </small>
 
-</div>
+                <h5>
 
+                    <?php
 
-<!-- Next Action Date & Time -->
+                    echo htmlspecialchars(
+                        $lead['phone']
+                    );
 
-<div class="col-md-6">
+                    ?>
 
-    <small class="text-muted">
-        Next Action Date & Time
-    </small>
+                </h5>
 
-    <h5>
+            </div>
 
-        <?php
+            <!-- Email -->
 
-        if (!empty($lead['next_action_at'])) {
+            <div class="col-md-6">
 
-            echo date(
-                'd M Y, h:i A',
-                strtotime(
-                    $lead['next_action_at']
-                )
-            );
+                <small class="text-muted">
+                    Email
+                </small>
 
-        } else {
+                <h5>
 
-            echo 'Not Scheduled';
+                    <?php
 
-        }
+                    echo htmlspecialchars(
+                        $lead['email'] ?? '-'
+                    );
 
-        ?>
+                    ?>
 
-    </h5>
+                </h5>
 
-</div>
+            </div>
 
+            <!-- Service Interest -->
 
+            <div class="col-md-6">
 
-    <!-- Created By -->
-    <div class="col-md-6">
-        <small class="text-muted">Created By</small>
-        <h5>
-            <?php echo htmlspecialchars($lead['creator_name']); ?>
-        </h5>
-    </div>
+                <small class="text-muted">
+                    Service Interest
+                </small>
 
-    <!-- Created On -->
-    <div class="col-md-6">
-        <small class="text-muted">Created On</small>
-        <p>
-            <?php
-            echo date(
-                'd M Y, h:i A',
-                strtotime($lead['created_at'])
-            );
-            ?>
-        </p>
-    </div>
+                <h5>
 
-    <!-- Notes -->
-    <div class="col-12">
-        <hr>
+                    <?php
 
-        <small class="text-muted">Notes</small>
+                    echo htmlspecialchars(
+                        $lead['service_interest'] ?? '-'
+                    );
 
-        <p class="mt-2">
-            <?php
-            echo nl2br(
-                htmlspecialchars(
-                    $lead['notes'] ?? 'No notes added.'
-                )
-            );
-            ?>
-        </p>
-    </div>
+                    ?>
 
-    <!-- Last Updated -->
-    <div class="col-md-6">
-        <small class="text-muted">Last Updated</small>
+                </h5>
 
-        <p>
-            <?php
-            echo date(
-                'd M Y, h:i A',
-                strtotime($lead['updated_at'])
-            );
-            ?>
-        </p>
-    </div>
+            </div>
 
-</div>
+            <!-- Source -->
+
+            <div class="col-md-6">
+
+                <small class="text-muted">
+                    Source
+                </small>
+
+                <h5>
+
+                    <?php
+
+                    echo htmlspecialchars(
+                        $lead['source_name'] ?? '-'
+                    );
+
+                    ?>
+
+                </h5>
+
+            </div>
+
+            <!-- Referral Partner -->
+
+            <div class="col-md-6">
+
+                <small class="text-muted">
+                    Referral Partner
+                </small>
+
+                <?php if (!empty($lead['referral_name'])): ?>
+
+                    <h5 class="mb-1">
+
+                        <?php
+
+                        echo htmlspecialchars(
+                            $lead['referral_name']
+                        );
+
+                        ?>
+
+                    </h5>
+
+                    <?php if (!empty($lead['referral_type'])): ?>
+
+                        <div class="hm-muted">
+
+                            <?php
+
+                            echo htmlspecialchars(
+                                $lead['referral_type']
+                            );
+
+                            ?>
+
+                        </div>
+
+                    <?php endif; ?>
+
+                    <?php if (!empty($lead['referral_organization'])): ?>
+
+                        <div class="hm-muted">
+
+                            <?php
+
+                            echo htmlspecialchars(
+                                $lead['referral_organization']
+                            );
+
+                            ?>
+
+                        </div>
+
+                    <?php endif; ?>
+
+                <?php else: ?>
+
+                    <h5 class="hm-muted">
+                        -
+                    </h5>
+
+                <?php endif; ?>
+
+            </div>
+
+            <!-- Referral Phone -->
+
+            <div class="col-md-6">
+
+                <small class="text-muted">
+                    Referral Phone
+                </small>
+
+                <h5>
+
+                    <?php
+
+                    echo htmlspecialchars(
+                        $lead['referral_phone'] ?? '-'
+                    );
+
+                    ?>
+
+                </h5>
+
+            </div>
+
+            <!-- Referral Email -->
+
+            <div class="col-md-6">
+
+                <small class="text-muted">
+                    Referral Email
+                </small>
+
+                <h5>
+
+                    <?php
+
+                    echo htmlspecialchars(
+                        $lead['referral_email'] ?? '-'
+                    );
+
+                    ?>
+
+                </h5>
+
+            </div>
+
+            <!-- Status -->
+
+            <div class="col-md-6">
+
+                <small class="text-muted">
+                    Status
+                </small>
+
+                <h5>
+
+                    <?php
+
+                    echo htmlspecialchars(
+                        $lead['status']
+                    );
+
+                    ?>
+
+                </h5>
+
+            </div>
+
+            <!-- Priority -->
+
+            <div class="col-md-6">
+
+                <small class="text-muted">
+                    Priority
+                </small>
+
+                <h5>
+
+                    <?php
+
+                    echo htmlspecialchars(
+                        $lead['priority']
+                    );
+
+                    ?>
+
+                </h5>
+
+            </div>
+
+            <!-- Assigned To -->
+
+            <div class="col-md-6">
+
+                <small class="text-muted">
+                    Assigned To
+                </small>
+
+                <h5>
+
+                    <?php
+
+                    echo htmlspecialchars(
+                        $lead['assigned_name']
+                        ?? 'Not Assigned'
+                    );
+
+                    ?>
+
+                </h5>
+
+            </div>
+
+            <!-- Next Action -->
+
+            <div class="col-md-6">
+
+                <small class="text-muted">
+                    Next Action
+                </small>
+
+                <h5>
+
+                    <?php
+
+                    echo htmlspecialchars(
+                        $lead['next_action_type']
+                        ?? 'Not Scheduled'
+                    );
+
+                    ?>
+
+                </h5>
+
+            </div>
+
+            <!-- Next Action Date & Time -->
+
+            <div class="col-md-6">
+
+                <small class="text-muted">
+                    Next Action Date & Time
+                </small>
+
+                <h5>
+
+                    <?php
+
+                    if (!empty($lead['next_action_at'])) {
+
+                        echo date(
+                            'd M Y, h:i A',
+                            strtotime(
+                                $lead['next_action_at']
+                            )
+                        );
+
+                    } else {
+
+                        echo 'Not Scheduled';
+
+                    }
+
+                    ?>
+
+                </h5>
+
+            </div>
+
+            <!-- Created By -->
+
+            <div class="col-md-6">
+
+                <small class="text-muted">
+                    Created By
+                </small>
+
+                <h5>
+
+                    <?php
+
+                    echo htmlspecialchars(
+                        $lead['creator_name']
+                    );
+
+                    ?>
+
+                </h5>
+
+            </div>
+
+            <!-- Created On -->
+
+            <div class="col-md-6">
+
+                <small class="text-muted">
+                    Created On
+                </small>
+
+                <p>
+
+                    <?php
+
+                    echo date(
+                        'd M Y, h:i A',
+                        strtotime(
+                            $lead['created_at']
+                        )
+                    );
+
+                    ?>
+
+                </p>
+
+            </div>
+
+            <!-- Notes -->
+
+            <div class="col-12">
+
+                <hr>
+
+                <small class="text-muted">
+                    Notes
+                </small>
+
+                <p class="mt-2">
+
+                    <?php
+
+                    echo nl2br(
+                        htmlspecialchars(
+                            $lead['notes']
+                            ?? 'No notes added.'
+                        )
+                    );
+
+                    ?>
+
+                </p>
+
+            </div>
+
+            <!-- Last Updated -->
+
+            <div class="col-md-6">
+
+                <small class="text-muted">
+                    Last Updated
+                </small>
+
+                <p>
+
+                    <?php
+
+                    echo date(
+                        'd M Y, h:i A',
+                        strtotime(
+                            $lead['updated_at']
+                        )
+                    );
+
+                    ?>
+
+                </p>
+
+            </div>
+
+        </div>
 
     </div>
 

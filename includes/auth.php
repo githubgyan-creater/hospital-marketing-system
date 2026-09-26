@@ -1,12 +1,56 @@
-<?php
+ <?php
 
 require_once __DIR__ . '/../config/config.php';
 
+/*
+|--------------------------------------------------------------------------
+| Normalize Role Name
+|--------------------------------------------------------------------------
+|
+| Database role names:
+| Administrator
+| Marketing Manager
+| Telecaller
+| Marketing Executive
+|
+| Application uses:
+| admin
+| manager
+| telecaller
+| marketing
+|--------------------------------------------------------------------------
+*/
+
+function normalize_role_name(string $role_name): string
+{
+    $role_name = strtolower(trim($role_name));
+
+    switch ($role_name) {
+
+        case 'administrator':
+        case 'admin':
+            return 'admin';
+
+        case 'marketing manager':
+        case 'manager':
+            return 'manager';
+
+        case 'telecaller':
+            return 'telecaller';
+
+        case 'marketing executive':
+        case 'marketing':
+            return 'marketing';
+
+        default:
+            return $role_name;
+    }
+}
 
 /*
-
- Check if user is logged in
-
+|--------------------------------------------------------------------------
+| Check Login
+|--------------------------------------------------------------------------
 */
 
 function is_logged_in(): bool
@@ -14,11 +58,10 @@ function is_logged_in(): bool
     return isset($_SESSION['user']);
 }
 
-
 /*
-
- Store user information in session
-
+|--------------------------------------------------------------------------
+| Login User
+|--------------------------------------------------------------------------
 */
 
 function login_user(array $user): void
@@ -29,15 +72,14 @@ function login_user(array $user): void
         'id'    => (int) $user['id'],
         'name'  => $user['name'],
         'email' => $user['email'],
-        'role'  => $user['role_name']
+        'role'  => normalize_role_name($user['role_name'])
     ];
 }
 
-
 /*
-
- Get currently logged-in user
-
+|--------------------------------------------------------------------------
+| Current User
+|--------------------------------------------------------------------------
 */
 
 function current_user(): ?array
@@ -45,11 +87,10 @@ function current_user(): ?array
     return $_SESSION['user'] ?? null;
 }
 
-
 /*
-
- Protect a page from unauthenticated users
-
+|--------------------------------------------------------------------------
+| Require Login
+|--------------------------------------------------------------------------
 */
 
 function require_login(): void
@@ -66,11 +107,10 @@ function require_login(): void
     }
 }
 
-
 /*
-
- Logout
-
+|--------------------------------------------------------------------------
+| Logout User
+|--------------------------------------------------------------------------
 */
 
 function logout_user(): void
