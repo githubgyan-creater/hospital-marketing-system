@@ -355,9 +355,9 @@ require_once __DIR__ . '/../../includes/header.php';
 
             <div>
 
-                <span class="badge bg-light text-dark">
+                <!-- <span class="badge bg-light text-dark">
                     APPOINTMENTS
-                </span>
+                </span> -->
 
                 <h1 class="hm-page-title mt-2 mb-1">
                     Appointments

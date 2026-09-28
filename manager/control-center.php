@@ -815,6 +815,7 @@ $page_title = 'Manager Control Center';
         <h4 class="section-title mb-3">
             Quick Access
         </h4>
+        
 
         <div class="d-flex flex-wrap gap-2">
 
@@ -842,6 +843,13 @@ $page_title = 'Manager Control Center';
             >
                 Appointments
             </a>
+            
+            <a
+    href="<?php echo BASE_URL; ?>/marketing/marketing-plans/index.php"
+    class="btn btn-outline-primary"
+>
+    Marketing Plans
+</a>
 
         </div>
 
