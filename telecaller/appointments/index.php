@@ -1,457 +1,67 @@
  <?php
 
-require_once __DIR__ . '/../includes/role_check.php';
-require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../../includes/role_check.php';
+require_once __DIR__ . '/../../config/database.php';
 
-require_role('admin', 'manager');
+require_role(
+    'admin',
+    'manager',
+    'telecaller',
+    'marketing'
+);
 
 $user = current_user();
 
-/*
-|--------------------------------------------------------------------------
-| Get Event ID
-|--------------------------------------------------------------------------
-*/
+$role = $user['role'] ?? '';
 
-$event_id = filter_input(
-    INPUT_GET,
-    'id',
-    FILTER_VALIDATE_INT
-);
+$user_id = (int) $user['id'];
 
-if (!$event_id) {
-    die('Invalid event ID.');
-}
+$page_title = 'Appointments';
+
 
 /*
 |--------------------------------------------------------------------------
-| Handle Staff Assignment / Removal
+| Filters
 |--------------------------------------------------------------------------
 */
 
-$message = '';
-$error = '';
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
-    $action = $_POST['action'] ?? '';
-
-    /*
-    |--------------------------------------------------------------------------
-    | Assign Staff
-    |--------------------------------------------------------------------------
-    */
-
-    if ($action === 'assign_staff') {
-
-        $staff_id = filter_input(
-            INPUT_POST,
-            'staff_id',
-            FILTER_VALIDATE_INT
-        );
-
-        if (!$staff_id) {
-
-            $error = 'Please select a staff member.';
-
-        } else {
-
-            /*
-            |--------------------------------------------------------------------------
-            | Check Staff
-            |--------------------------------------------------------------------------
-            */
-
-            $stmt = $pdo->prepare("
-                SELECT
-                    u.id,
-                    u.name,
-                    u.email,
-                    u.status,
-                    r.name AS role_name
-                FROM users u
-                INNER JOIN roles r
-                    ON u.role_id = r.id
-                WHERE u.id = ?
-                  AND u.status = 'active'
-                  AND LOWER(r.name) IN (
-                      'telecaller',
-                      'marketing executive',
-                      'marketing'
-                  )
-                LIMIT 1
-            ");
-
-            $stmt->execute([
-                $staff_id
-            ]);
-
-            $staff = $stmt->fetch();
-
-            if (!$staff) {
-
-                $error =
-                    'Selected staff member is not available for event assignment.';
-
-            } else {
-
-                /*
-                |--------------------------------------------------------------------------
-                | Check Duplicate Assignment
-                |--------------------------------------------------------------------------
-                */
-
-                $stmt = $pdo->prepare("
-                    SELECT id
-                    FROM event_assignments
-                    WHERE event_id = ?
-                      AND user_id = ?
-                    LIMIT 1
-                ");
-
-                $stmt->execute([
-                    $event_id,
-                    $staff_id
-                ]);
-
-                $existing_assignment = $stmt->fetch();
-
-                if ($existing_assignment) {
-
-                    $error =
-                        'This staff member is already assigned to this event.';
-
-                } else {
-
-                    /*
-                    |--------------------------------------------------------------------------
-                    | Insert Assignment
-                    |--------------------------------------------------------------------------
-                    */
-
-                    $stmt = $pdo->prepare("
-                        INSERT INTO event_assignments
-                        (
-                            event_id,
-                            user_id,
-                            assigned_by
-                        )
-                        VALUES (?, ?, ?)
-                    ");
-
-                    $stmt->execute([
-                        $event_id,
-                        $staff_id,
-                        $user['id']
-                    ]);
-
-                    $message =
-                        'Staff member assigned successfully.';
-                }
-            }
-        }
-    }
+$search = trim($_GET['search'] ?? '');
+$status = trim($_GET['status'] ?? '');
+$date   = trim($_GET['date'] ?? '');
 
 
-    /*
-    |--------------------------------------------------------------------------
-    | Remove Staff
-    |--------------------------------------------------------------------------
-    */
+/*
+|--------------------------------------------------------------------------
+| Allowed Statuses
+|--------------------------------------------------------------------------
+*/
 
-    if ($action === 'remove_staff') {
+$allowed_statuses = [
+    'Scheduled',
+    'Confirmed',
+    'Completed',
+    'Cancelled',
+    'No Show'
+];
 
-        $assignment_id = filter_input(
-            INPUT_POST,
-            'assignment_id',
-            FILTER_VALIDATE_INT
-        );
-
-        if (!$assignment_id) {
-
-            $error = 'Invalid assignment.';
-
-        } else {
-
-            $stmt = $pdo->prepare("
-                DELETE FROM event_assignments
-                WHERE id = ?
-                  AND event_id = ?
-            ");
-
-            $stmt->execute([
-                $assignment_id,
-                $event_id
-            ]);
-
-            if ($stmt->rowCount() > 0) {
-
-                $message =
-                    'Staff assignment removed successfully.';
-
-            } else {
-
-                $error =
-                    'Assignment not found.';
-            }
-        }
-    }
+if (
+    $status !== ''
+    && !in_array($status, $allowed_statuses, true)
+) {
+    $status = '';
 }
 
 
 /*
 |--------------------------------------------------------------------------
-| Get Event Details
+| Appointment Query
 |--------------------------------------------------------------------------
 */
 
-$stmt = $pdo->prepare("
+$sql = "
     SELECT
-        e.id,
-        e.event_name,
-        e.event_type,
-        e.event_date,
-        e.location,
-        e.description,
-        e.status,
-        e.created_at,
-        e.updated_at,
-
-        u.name AS created_by_name,
-        u.email AS created_by_email
-
-    FROM events e
-
-    LEFT JOIN users u
-        ON e.created_by = u.id
-
-    WHERE e.id = ?
-
-    LIMIT 1
-");
-
-$stmt->execute([
-    $event_id
-]);
-
-$event = $stmt->fetch();
-
-if (!$event) {
-    die('Event not found.');
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| Event Performance Summary
-|--------------------------------------------------------------------------
-*/
-
-/*
-| Assigned Staff
-*/
-
-$stmt = $pdo->prepare("
-    SELECT COUNT(*)
-    FROM event_assignments
-    WHERE event_id = ?
-");
-
-$stmt->execute([
-    $event_id
-]);
-
-$assigned_staff_count = (int) $stmt->fetchColumn();
-
-
-/*
-| Leads Generated
-*/
-
-$stmt = $pdo->prepare("
-    SELECT COUNT(*)
-    FROM event_leads
-    WHERE event_id = ?
-");
-
-$stmt->execute([
-    $event_id
-]);
-
-$leads_generated_count = (int) $stmt->fetchColumn();
-
-
-/*
-| Appointments
-|
-| Based on the current database structure,
-| appointments are connected to events through:
-|
-| event_leads -> lead_id -> appointments.lead_id
-*/
-
-$stmt = $pdo->prepare("
-    SELECT COUNT(DISTINCT a.id)
-
-    FROM appointments a
-
-    INNER JOIN event_leads el
-        ON a.lead_id = el.lead_id
-
-    WHERE el.event_id = ?
-");
-
-$stmt->execute([
-    $event_id
-]);
-
-$appointments_count = (int) $stmt->fetchColumn();
-
-
-/*
-|--------------------------------------------------------------------------
-| Get Available Staff
-|--------------------------------------------------------------------------
-*/
-
-$stmt = $pdo->query("
-    SELECT
-        u.id,
-        u.name,
-        u.email,
-        r.name AS role_name
-
-    FROM users u
-
-    INNER JOIN roles r
-        ON u.role_id = r.id
-
-    WHERE u.status = 'active'
-
-      AND LOWER(r.name) IN (
-          'telecaller',
-          'marketing executive',
-          'marketing'
-      )
-
-    ORDER BY u.name ASC
-");
-
-$available_staff = $stmt->fetchAll();
-
-
-/*
-|--------------------------------------------------------------------------
-| Get Assigned Staff
-|--------------------------------------------------------------------------
-*/
-
-$stmt = $pdo->prepare("
-    SELECT
-        ea.id AS assignment_id,
-
-        u.id AS user_id,
-        u.name AS staff_name,
-        u.email,
-
-        r.name AS role_name,
-
-        assigned_by_user.name AS assigned_by_name,
-
-        ea.assigned_at
-
-    FROM event_assignments ea
-
-    INNER JOIN users u
-        ON ea.user_id = u.id
-
-    INNER JOIN roles r
-        ON u.role_id = r.id
-
-    LEFT JOIN users assigned_by_user
-        ON ea.assigned_by = assigned_by_user.id
-
-    WHERE ea.event_id = ?
-
-    ORDER BY ea.assigned_at DESC
-");
-
-$stmt->execute([
-    $event_id
-]);
-
-$assigned_staff = $stmt->fetchAll();
-
-
-/*
-|--------------------------------------------------------------------------
-| Get Event Leads
-|--------------------------------------------------------------------------
-*/
-
-$stmt = $pdo->prepare("
-    SELECT
-
-        el.id AS event_lead_id,
-
-        l.id AS lead_id,
-        l.name,
-        l.phone,
-        l.email,
-        l.service_interest,
-        l.status,
-        l.priority,
-
-        u.name AS captured_by_name,
-
-        el.created_at
-
-    FROM event_leads el
-
-    INNER JOIN leads l
-        ON el.lead_id = l.id
-
-    LEFT JOIN users u
-        ON el.captured_by = u.id
-
-    WHERE el.event_id = ?
-
-    ORDER BY el.created_at DESC
-");
-
-$stmt->execute([
-    $event_id
-]);
-
-$event_leads = $stmt->fetchAll();
-
-
-/*
-|--------------------------------------------------------------------------
-| Get Event Appointments
-|--------------------------------------------------------------------------
-|
-| Current appointment structure from telecaller/appointments/index.php:
-|
-| appointments
-| - id
-| - lead_id
-| - appointment_date
-| - appointment_type
-| - notes
-| - status
-| - created_at
-|
-|--------------------------------------------------------------------------
-*/
-
-$stmt = $pdo->prepare("
-    SELECT
-
-        a.id AS appointment_id,
-
+        a.id,
         a.lead_id,
-
         a.appointment_date,
         a.appointment_type,
         a.notes,
@@ -460,102 +70,242 @@ $stmt = $pdo->prepare("
 
         l.name AS lead_name,
         l.phone AS lead_phone,
-        l.service_interest
+        l.email AS lead_email,
+        l.service_interest,
+        l.assigned_to
 
     FROM appointments a
-
-    INNER JOIN event_leads el
-        ON a.lead_id = el.lead_id
 
     INNER JOIN leads l
         ON a.lead_id = l.id
 
-    WHERE el.event_id = ?
+    WHERE 1 = 1
+";
 
-    ORDER BY a.appointment_date ASC, a.id ASC
-");
-
-$stmt->execute([
-    $event_id
-]);
-
-$event_appointments = $stmt->fetchAll();
+$params = [];
 
 
 /*
 |--------------------------------------------------------------------------
-| Helper Functions
+| Role Based Access
+|--------------------------------------------------------------------------
+|
+| Admin / Manager
+| -> See all appointments
+|
+| Telecaller / Marketing
+| -> See appointments for their assigned leads
+|
+*/
+
+if (
+    $role === 'telecaller'
+    || $role === 'marketing'
+) {
+
+    $sql .= "
+        AND l.assigned_to = ?
+    ";
+
+    $params[] = $user_id;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Search
 |--------------------------------------------------------------------------
 */
 
-function event_status_class(string $status): string
-{
-    switch ($status) {
+if ($search !== '') {
 
-        case 'Planned':
-            return 'bg-primary';
+    $sql .= "
+        AND (
+            l.name LIKE ?
+            OR l.phone LIKE ?
+            OR l.email LIKE ?
+            OR l.service_interest LIKE ?
+        )
+    ";
 
-        case 'Ongoing':
-            return 'bg-warning text-dark';
+    $search_value = '%' . $search . '%';
 
-        case 'Completed':
-            return 'bg-success';
-
-        case 'Cancelled':
-            return 'bg-danger';
-
-        default:
-            return 'bg-secondary';
-    }
+    $params[] = $search_value;
+    $params[] = $search_value;
+    $params[] = $search_value;
+    $params[] = $search_value;
 }
 
 
-function lead_status_class(string $status): string
-{
-    switch ($status) {
+/*
+|--------------------------------------------------------------------------
+| Status Filter
+|--------------------------------------------------------------------------
+*/
 
-        case 'New':
-            return 'bg-primary';
+if ($status !== '') {
 
-        case 'Contacted':
-            return 'bg-info text-dark';
+    $sql .= "
+        AND a.status = ?
+    ";
 
-        case 'Interested':
-            return 'bg-success';
-
-        case 'Converted':
-            return 'bg-success';
-
-        case 'Lost':
-            return 'bg-danger';
-
-        default:
-            return 'bg-secondary';
-    }
+    $params[] = $status;
 }
 
 
-function priority_class(string $priority): string
-{
-    switch ($priority) {
+/*
+|--------------------------------------------------------------------------
+| Date Filter
+|--------------------------------------------------------------------------
+*/
 
-        case 'High':
-            return 'bg-danger';
+if ($date !== '') {
 
-        case 'Medium':
-            return 'bg-warning text-dark';
+    $sql .= "
+        AND DATE(a.appointment_date) = ?
+    ";
 
-        case 'Low':
-            return 'bg-secondary';
-
-        default:
-            return 'bg-secondary';
-    }
+    $params[] = $date;
 }
 
 
-function appointment_status_class(string $status): string
-{
+/*
+|--------------------------------------------------------------------------
+| Order
+|--------------------------------------------------------------------------
+*/
+
+$sql .= "
+    ORDER BY
+        a.appointment_date ASC,
+        a.id DESC
+";
+
+
+/*
+|--------------------------------------------------------------------------
+| Execute Appointment Query
+|--------------------------------------------------------------------------
+*/
+
+$stmt = $pdo->prepare($sql);
+
+$stmt->execute($params);
+
+$appointments = $stmt->fetchAll();
+
+
+/*
+|--------------------------------------------------------------------------
+| Summary
+|--------------------------------------------------------------------------
+*/
+
+$summary_sql = "
+    SELECT
+
+        COUNT(*) AS total_appointments,
+
+        SUM(
+            CASE
+                WHEN a.status = 'Scheduled'
+                THEN 1
+                ELSE 0
+            END
+        ) AS scheduled_count,
+
+        SUM(
+            CASE
+                WHEN a.status = 'Confirmed'
+                THEN 1
+                ELSE 0
+            END
+        ) AS confirmed_count,
+
+        SUM(
+            CASE
+                WHEN a.status = 'Completed'
+                THEN 1
+                ELSE 0
+            END
+        ) AS completed_count,
+
+        SUM(
+            CASE
+                WHEN a.status = 'Cancelled'
+                THEN 1
+                ELSE 0
+            END
+        ) AS cancelled_count,
+
+        SUM(
+            CASE
+                WHEN a.status = 'No Show'
+                THEN 1
+                ELSE 0
+            END
+        ) AS no_show_count
+
+    FROM appointments a
+
+    INNER JOIN leads l
+        ON a.lead_id = l.id
+
+    WHERE 1 = 1
+";
+
+$summary_params = [];
+
+
+if (
+    $role === 'telecaller'
+    || $role === 'marketing'
+) {
+
+    $summary_sql .= "
+        AND l.assigned_to = ?
+    ";
+
+    $summary_params[] = $user_id;
+}
+
+
+$stmt = $pdo->prepare($summary_sql);
+
+$stmt->execute($summary_params);
+
+$summary = $stmt->fetch();
+
+
+$total_appointments =
+    (int) ($summary['total_appointments'] ?? 0);
+
+$scheduled_count =
+    (int) ($summary['scheduled_count'] ?? 0);
+
+$confirmed_count =
+    (int) ($summary['confirmed_count'] ?? 0);
+
+$completed_count =
+    (int) ($summary['completed_count'] ?? 0);
+
+$cancelled_count =
+    (int) ($summary['cancelled_count'] ?? 0);
+
+$no_show_count =
+    (int) ($summary['no_show_count'] ?? 0);
+
+
+/*
+|--------------------------------------------------------------------------
+| Appointment Status Class
+|--------------------------------------------------------------------------
+*/
+
+function appointment_status_class(
+    string $status
+): string {
+
     switch ($status) {
 
         case 'Scheduled':
@@ -581,522 +331,109 @@ function appointment_status_class(string $status): string
 
 /*
 |--------------------------------------------------------------------------
-| Page
+| Common Header
 |--------------------------------------------------------------------------
 */
 
-$page_title = 'Event Details';
+require_once __DIR__ . '/../../includes/header.php';
 
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-
-    <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <title>
-        <?php echo htmlspecialchars($event['event_name']); ?>
-        - Event Details
-    </title>
-
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-    >
-
-    <style>
-
-        body {
-            background: #f7f5ef;
-            color: #243746;
-        }
-
-        .hm-card {
-            background: #ffffff;
-            border: 1px solid #e5e1d7;
-            border-radius: 14px;
-            box-shadow: 0 4px 18px rgba(23, 50, 77, 0.06);
-        }
-
-        .hm-primary {
-            background: #17324d;
-            color: #ffffff;
-            border: none;
-        }
-
-        .hm-primary:hover {
-            background: #12283d;
-            color: #ffffff;
-        }
-
-        .hm-muted {
-            color: #71808c;
-        }
-
-        .performance-value {
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 0;
-            color: #17324d;
-        }
-
-        .performance-label {
-            color: #71808c;
-            font-size: 0.9rem;
-            margin-bottom: 8px;
-        }
-
-        .section-title {
-            color: #17324d;
-            font-weight: 700;
-        }
-
-        .table th {
-            white-space: nowrap;
-        }
-
-        .event-description {
-            white-space: pre-line;
-        }
-
-    </style>
-
-</head>
-
-<body>
 
 <div class="container py-4">
 
 
-    <!-- ========================================================= -->
+    <!-- ============================================================= -->
     <!-- PAGE HEADER -->
-    <!-- ========================================================= -->
-
-    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-
-        <div>
-
-            <div class="mb-2">
-
-                <a
-                    href="<?php echo BASE_URL; ?>/events/index.php"
-                    class="text-decoration-none"
-                >
-                    ← Back to Events
-                </a>
-
-            </div>
-
-            <h2 class="mb-1">
-
-                <?php
-                echo htmlspecialchars(
-                    $event['event_name']
-                );
-                ?>
-
-            </h2>
-
-            <div class="hm-muted">
-
-                Event ID:
-                #<?php echo (int) $event['id']; ?>
-
-            </div>
-
-        </div>
-
-
-        <div class="d-flex flex-wrap gap-2 mt-3 mt-md-0">
-
-            <a
-                href="<?php echo BASE_URL; ?>/events/capture-lead.php?event_id=<?php echo (int) $event['id']; ?>"
-                class="btn hm-primary"
-            >
-                + Capture Lead
-            </a>
-
-            <a
-                href="<?php echo BASE_URL; ?>/events/edit.php?id=<?php echo (int) $event['id']; ?>"
-                class="btn btn-outline-primary"
-            >
-                Edit
-            </a>
-
-            <a
-                href="<?php echo BASE_URL; ?>/events/delete.php?id=<?php echo (int) $event['id']; ?>"
-                class="btn btn-outline-danger"
-            >
-                Delete
-            </a>
-
-        </div>
-
-    </div>
-
-
-    <!-- ========================================================= -->
-    <!-- ALERTS -->
-    <!-- ========================================================= -->
-
-    <?php if ($message !== ''): ?>
-
-        <div class="alert alert-success">
-
-            <?php
-            echo htmlspecialchars($message);
-            ?>
-
-        </div>
-
-    <?php endif; ?>
-
-
-    <?php if ($error !== ''): ?>
-
-        <div class="alert alert-danger">
-
-            <?php
-            echo htmlspecialchars($error);
-            ?>
-
-        </div>
-
-    <?php endif; ?>
-
-
-    <!-- ========================================================= -->
-    <!-- EVENT PERFORMANCE -->
-    <!-- ========================================================= -->
+    <!-- ============================================================= -->
 
     <div class="mb-4">
 
-        <h4 class="section-title mb-3">
-            Event Performance
-        </h4>
-
-
-        <div class="row g-3">
-
-
-            <!-- Assigned Staff -->
-
-            <div class="col-md-4">
-
-                <div class="hm-card p-4 h-100">
-
-                    <div class="performance-label">
-                        Assigned Staff
-                    </div>
-
-                    <div class="performance-value">
-
-                        <?php
-                        echo $assigned_staff_count;
-                        ?>
-
-                    </div>
-
-                    <div class="small hm-muted mt-1">
-                        Staff members assigned to this event
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <!-- Leads Generated -->
-
-            <div class="col-md-4">
-
-                <div class="hm-card p-4 h-100">
-
-                    <div class="performance-label">
-                        Leads Generated
-                    </div>
-
-                    <div class="performance-value">
-
-                        <?php
-                        echo $leads_generated_count;
-                        ?>
-
-                    </div>
-
-                    <div class="small hm-muted mt-1">
-                        Leads captured through this event
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <!-- Appointments -->
-
-            <div class="col-md-4">
-
-                <div class="hm-card p-4 h-100">
-
-                    <div class="performance-label">
-                        Appointments
-                    </div>
-
-                    <div class="performance-value">
-
-                        <?php
-                        echo $appointments_count;
-                        ?>
-
-                    </div>
-
-                    <div class="small hm-muted mt-1">
-                        Appointments linked to event leads
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <!-- ========================================================= -->
-    <!-- EVENT INFORMATION -->
-    <!-- ========================================================= -->
-
-    <div class="hm-card p-4 mb-4">
-
-        <div class="d-flex justify-content-between align-items-center mb-3">
-
-            <h4 class="section-title mb-0">
-                Event Details
-            </h4>
-
-            <span
-                class="badge <?php echo event_status_class($event['status']); ?>"
-            >
-
-                <?php
-                echo htmlspecialchars(
-                    $event['status']
-                );
-                ?>
-
-            </span>
-
-        </div>
-
-
-        <div class="row g-4">
-
-
-            <!-- Event Name -->
-
-            <div class="col-md-6">
-
-                <div class="hm-muted small">
-                    Event Name
-                </div>
-
-                <div class="fw-semibold">
-
-                    <?php
-                    echo htmlspecialchars(
-                        $event['event_name']
-                    );
-                    ?>
-
-                </div>
-
-            </div>
-
-
-            <!-- Event Type -->
-
-            <div class="col-md-6">
-
-                <div class="hm-muted small">
-                    Event Type
-                </div>
-
-                <div class="fw-semibold">
-
-                    <?php
-                    echo htmlspecialchars(
-                        $event['event_type']
-                    );
-                    ?>
-
-                </div>
-
-            </div>
-
-
-            <!-- Event Date -->
-
-            <div class="col-md-6">
-
-                <div class="hm-muted small">
-                    Event Date
-                </div>
-
-                <div class="fw-semibold">
-
-                    <?php
-                    echo date(
-                        'd M Y',
-                        strtotime($event['event_date'])
-                    );
-                    ?>
-
-                </div>
-
-            </div>
-
-
-            <!-- Location -->
-
-            <div class="col-md-6">
-
-                <div class="hm-muted small">
-                    Location
-                </div>
-
-                <div class="fw-semibold">
-
-                    <?php
-
-                    if (!empty($event['location'])) {
-
-                        echo htmlspecialchars(
-                            $event['location']
-                        );
-
-                    } else {
-
-                        echo '<span class="text-muted">
-                            Not specified
-                        </span>';
-
-                    }
-
-                    ?>
-
-                </div>
-
-            </div>
-
-
-            <!-- Created By -->
-
-            <div class="col-md-6">
-
-                <div class="hm-muted small">
-                    Created By
-                </div>
-
-                <div class="fw-semibold">
-
-                    <?php
-                    echo htmlspecialchars(
-                        $event['created_by_name']
-                        ?? 'Unknown'
-                    );
-                    ?>
-
-                </div>
-
-            </div>
-
-
-            <!-- Created On -->
-
-            <div class="col-md-6">
-
-                <div class="hm-muted small">
-                    Created On
-                </div>
-
-                <div class="fw-semibold">
-
-                    <?php
-                    echo date(
-                        'd M Y, h:i A',
-                        strtotime($event['created_at'])
-                    );
-                    ?>
-
-                </div>
-
-            </div>
-
-
-            <!-- Description -->
-
-            <div class="col-12">
-
-                <div class="hm-muted small mb-1">
-                    Description
-                </div>
-
-                <div class="event-description">
-
-                    <?php
-
-                    if (!empty($event['description'])) {
-
-                        echo nl2br(
-                            htmlspecialchars(
-                                $event['description']
-                            )
-                        );
-
-                    } else {
-
-                        echo '<span class="text-muted">
-                            No description available.
-                        </span>';
-
-                    }
-
-                    ?>
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <!-- ========================================================= -->
-    <!-- EVENT STAFF -->
-    <!-- ========================================================= -->
-
-    <div class="hm-card p-4 mb-4">
-
-        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+        <div
+            class="d-flex flex-wrap justify-content-between align-items-center"
+        >
 
             <div>
 
-                <h4 class="section-title mb-1">
-                    Event Staff
-                </h4>
+                <span class="badge bg-light text-dark">
+                    APPOINTMENTS
+                </span>
 
-                <div class="hm-muted small">
-                    Assign Telecallers and Marketing Executives
+                <h1 class="hm-page-title mt-2 mb-1">
+                    Appointments
+                </h1>
+
+                <p class="hm-muted mb-0">
+                    Manage and monitor lead appointments.
+                </p>
+
+            </div>
+
+
+            <div class="mt-3 mt-md-0">
+
+                <?php if ($role === 'manager'): ?>
+
+                    <a
+                        href="<?php echo BASE_URL; ?>/manager/control-center.php"
+                        class="btn btn-outline-primary"
+                    >
+                        Control Center
+                    </a>
+
+                <?php elseif ($role === 'telecaller'): ?>
+
+                    <a
+                        href="<?php echo BASE_URL; ?>/telecaller/dashboard.php"
+                        class="btn btn-outline-primary"
+                    >
+                        My Day
+                    </a>
+
+                <?php elseif ($role === 'marketing'): ?>
+
+                    <a
+                        href="<?php echo BASE_URL; ?>/marketing/dashboard.php"
+                        class="btn btn-outline-primary"
+                    >
+                        My Day
+                    </a>
+
+                <?php else: ?>
+
+                    <a
+                        href="<?php echo BASE_URL; ?>/admin/dashboard.php"
+                        class="btn btn-outline-primary"
+                    >
+                        Dashboard
+                    </a>
+
+                <?php endif; ?>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ============================================================= -->
+    <!-- SUMMARY CARDS -->
+    <!-- ============================================================= -->
+
+    <div class="row g-4 mb-4">
+
+
+        <div class="col-6 col-md-4 col-lg-2">
+
+            <div class="hm-card p-4 h-100">
+
+                <div class="hm-muted small mb-1">
+                    Total
+                </div>
+
+                <div class="fs-2 fw-bold">
+                    <?php echo $total_appointments; ?>
                 </div>
 
             </div>
@@ -1104,281 +441,288 @@ $page_title = 'Event Details';
         </div>
 
 
-        <!-- Assign Staff -->
+        <div class="col-6 col-md-4 col-lg-2">
 
-        <form
-            method="POST"
-            class="row g-3 align-items-end mb-4"
-        >
+            <div class="hm-card p-4 h-100">
 
-            <input
-                type="hidden"
-                name="action"
-                value="assign_staff"
-            >
+                <div class="hm-muted small mb-1">
+                    Scheduled
+                </div>
+
+                <div class="fs-2 fw-bold">
+                    <?php echo $scheduled_count; ?>
+                </div>
+
+            </div>
+
+        </div>
 
 
-            <div class="col-md-8">
+        <div class="col-6 col-md-4 col-lg-2">
 
-                <label class="form-label">
-                    Select Staff
-                </label>
+            <div class="hm-card p-4 h-100">
 
-                <select
-                    name="staff_id"
-                    class="form-select"
-                    required
-                >
+                <div class="hm-muted small mb-1">
+                    Confirmed
+                </div>
 
-                    <option value="">
-                        -- Select Staff Member --
-                    </option>
+                <div class="fs-2 fw-bold">
+                    <?php echo $confirmed_count; ?>
+                </div>
 
-                    <?php foreach ($available_staff as $staff_member): ?>
+            </div>
 
-                        <option
-                            value="<?php echo (int) $staff_member['id']; ?>"
-                        >
+        </div>
 
-                            <?php
-                            echo htmlspecialchars(
-                                $staff_member['name']
-                            );
-                            ?>
 
-                            -
-                            <?php
-                            echo htmlspecialchars(
-                                $staff_member['role_name']
-                            );
-                            ?>
+        <div class="col-6 col-md-4 col-lg-2">
 
+            <div class="hm-card p-4 h-100">
+
+                <div class="hm-muted small mb-1">
+                    Completed
+                </div>
+
+                <div class="fs-2 fw-bold">
+                    <?php echo $completed_count; ?>
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-6 col-md-4 col-lg-2">
+
+            <div class="hm-card p-4 h-100">
+
+                <div class="hm-muted small mb-1">
+                    Cancelled
+                </div>
+
+                <div class="fs-2 fw-bold">
+                    <?php echo $cancelled_count; ?>
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-6 col-md-4 col-lg-2">
+
+            <div class="hm-card p-4 h-100">
+
+                <div class="hm-muted small mb-1">
+                    No Show
+                </div>
+
+                <div class="fs-2 fw-bold">
+                    <?php echo $no_show_count; ?>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ============================================================= -->
+    <!-- FILTERS -->
+    <!-- ============================================================= -->
+
+    <div class="hm-card p-4 mb-4">
+
+        <h4 class="mb-3">
+            Search & Filter
+        </h4>
+
+
+        <form method="GET">
+
+            <div class="row g-3 align-items-end">
+
+
+                <div class="col-md-5">
+
+                    <label class="form-label">
+                        Search
+                    </label>
+
+                    <input
+                        type="text"
+                        name="search"
+                        class="form-control"
+                        value="<?php echo htmlspecialchars($search); ?>"
+                        placeholder="Name, phone, email or service"
+                    >
+
+                </div>
+
+
+                <div class="col-md-3">
+
+                    <label class="form-label">
+                        Status
+                    </label>
+
+                    <select
+                        name="status"
+                        class="form-select"
+                    >
+
+                        <option value="">
+                            All Statuses
                         </option>
 
-                    <?php endforeach; ?>
 
-                </select>
+                        <?php foreach (
+                            $allowed_statuses
+                            as $appointment_status
+                        ): ?>
+
+                            <option
+                                value="<?php echo htmlspecialchars($appointment_status); ?>"
+                                <?php
+                                echo (
+                                    $status ===
+                                    $appointment_status
+                                )
+                                    ? 'selected'
+                                    : '';
+                                ?>
+                            >
+
+                                <?php
+                                echo htmlspecialchars(
+                                    $appointment_status
+                                );
+                                ?>
+
+                            </option>
+
+                        <?php endforeach; ?>
+
+                    </select>
+
+                </div>
+
+
+                <div class="col-md-2">
+
+                    <label class="form-label">
+                        Date
+                    </label>
+
+                    <input
+                        type="date"
+                        name="date"
+                        class="form-control"
+                        value="<?php echo htmlspecialchars($date); ?>"
+                    >
+
+                </div>
+
+
+                <div class="col-md-2">
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary w-100"
+                    >
+                        Apply
+                    </button>
+
+                </div>
 
             </div>
 
 
-            <div class="col-md-4">
+            <div class="mt-3">
 
-                <button
-                    type="submit"
-                    class="btn hm-primary w-100"
+                <a
+                    href="<?php echo BASE_URL; ?>/telecaller/appointments/index.php"
+                    class="btn btn-outline-secondary btn-sm"
                 >
-                    Assign Staff
-                </button>
+                    Reset Filters
+                </a>
 
             </div>
 
         </form>
 
-
-        <!-- Assigned Staff Table -->
-
-        <?php if (!empty($assigned_staff)): ?>
-
-            <div class="table-responsive">
-
-                <table class="table table-bordered align-middle">
-
-                    <thead class="table-light">
-
-                        <tr>
-
-                            <th>Staff</th>
-
-                            <th>Role</th>
-
-                            <th>Assigned By</th>
-
-                            <th>Assigned On</th>
-
-                            <th>Action</th>
-
-                        </tr>
-
-                    </thead>
-
-
-                    <tbody>
-
-                    <?php foreach ($assigned_staff as $staff_member): ?>
-
-                        <tr>
-
-                            <td>
-
-                                <div class="fw-semibold">
-
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $staff_member['staff_name']
-                                    );
-                                    ?>
-
-                                </div>
-
-                                <div class="small hm-muted">
-
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $staff_member['email']
-                                    );
-                                    ?>
-
-                                </div>
-
-                            </td>
-
-
-                            <td>
-
-                                <span class="badge bg-info text-dark">
-
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $staff_member['role_name']
-                                    );
-                                    ?>
-
-                                </span>
-
-                            </td>
-
-
-                            <td>
-
-                                <?php
-                                echo htmlspecialchars(
-                                    $staff_member['assigned_by_name']
-                                    ?? 'Unknown'
-                                );
-                                ?>
-
-                            </td>
-
-
-                            <td>
-
-                                <?php
-                                echo date(
-                                    'd M Y, h:i A',
-                                    strtotime(
-                                        $staff_member['assigned_at']
-                                    )
-                                );
-                                ?>
-
-                            </td>
-
-
-                            <td>
-
-                                <form
-                                    method="POST"
-                                    onsubmit="return confirm(
-                                        'Remove this staff member from the event?'
-                                    );"
-                                >
-
-                                    <input
-                                        type="hidden"
-                                        name="action"
-                                        value="remove_staff"
-                                    >
-
-                                    <input
-                                        type="hidden"
-                                        name="assignment_id"
-                                        value="<?php echo (int) $staff_member['assignment_id']; ?>"
-                                    >
-
-                                    <button
-                                        type="submit"
-                                        class="btn btn-sm btn-outline-danger"
-                                    >
-                                        Remove
-                                    </button>
-
-                                </form>
-
-                            </td>
-
-                        </tr>
-
-                    <?php endforeach; ?>
-
-                    </tbody>
-
-                </table>
-
-            </div>
-
-        <?php else: ?>
-
-            <div class="alert alert-light border mb-0">
-
-                No staff members are assigned to this event yet.
-
-            </div>
-
-        <?php endif; ?>
-
     </div>
 
 
-    <!-- ========================================================= -->
-    <!-- EVENT LEADS -->
-    <!-- ========================================================= -->
+    <!-- ============================================================= -->
+    <!-- APPOINTMENT LIST -->
+    <!-- ============================================================= -->
 
-    <div class="hm-card p-4 mb-4">
+    <div class="hm-card p-4">
 
-        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+        <div
+            class="d-flex flex-wrap justify-content-between align-items-center mb-3"
+        >
 
             <div>
 
-                <h4 class="section-title mb-1">
-                    Event Leads
+                <h4 class="mb-1">
+                    Appointment List
                 </h4>
 
-                <div class="hm-muted small">
-                    Leads captured during this event
-                </div>
+                <p class="hm-muted mb-0">
+                    <?php echo count($appointments); ?>
+                    appointment(s) found.
+                </p>
 
             </div>
-
-
-            <a
-                href="<?php echo BASE_URL; ?>/events/capture-lead.php?event_id=<?php echo (int) $event['id']; ?>"
-                class="btn hm-primary"
-            >
-                + Capture Lead
-            </a>
 
         </div>
 
 
-        <?php if (!empty($event_leads)): ?>
+        <?php if (!empty($appointments)): ?>
+
 
             <div class="table-responsive">
 
-                <table class="table table-bordered align-middle">
+                <table class="table table-hover align-middle">
 
-                    <thead class="table-light">
+                    <thead>
 
                         <tr>
 
-                            <th>Lead</th>
-                            <th>Phone</th>
-                            <th>Service</th>
-                            <th>Status</th>
-                            <th>Priority</th>
-                            <th>Captured By</th>
-                            <th>Captured On</th>
-                            <th>Action</th>
+                            <th>
+                                #
+                            </th>
+
+                            <th>
+                                Lead
+                            </th>
+
+                            <th>
+                                Phone
+                            </th>
+
+                            <th>
+                                Service
+                            </th>
+
+                            <th>
+                                Date & Time
+                            </th>
+
+                            <th>
+                                Type
+                            </th>
+
+                            <th>
+                                Status
+                            </th>
+
+                            <th>
+                                Action
+                            </th>
 
                         </tr>
 
@@ -1387,9 +731,24 @@ $page_title = 'Event Details';
 
                     <tbody>
 
-                    <?php foreach ($event_leads as $lead): ?>
+
+                    <?php foreach (
+                        $appointments
+                        as $appointment
+                    ): ?>
 
                         <tr>
+
+
+                            <td>
+
+                                <?php
+                                echo (int)
+                                    $appointment['id'];
+                                ?>
+
+                            </td>
+
 
                             <td>
 
@@ -1397,19 +756,26 @@ $page_title = 'Event Details';
 
                                     <?php
                                     echo htmlspecialchars(
-                                        $lead['name']
+                                        $appointment['lead_name']
                                     );
                                     ?>
 
                                 </div>
 
-                                <?php if (!empty($lead['email'])): ?>
+
+                                <?php
+                                if (
+                                    !empty(
+                                        $appointment['lead_email']
+                                    )
+                                ):
+                                ?>
 
                                     <div class="small hm-muted">
 
                                         <?php
                                         echo htmlspecialchars(
-                                            $lead['email']
+                                            $appointment['lead_email']
                                         );
                                         ?>
 
@@ -1424,212 +790,6 @@ $page_title = 'Event Details';
 
                                 <?php
                                 echo htmlspecialchars(
-                                    $lead['phone']
-                                );
-                                ?>
-
-                            </td>
-
-
-                            <td>
-
-                                <?php
-                                echo htmlspecialchars(
-                                    $lead['service_interest']
-                                    ?? '—'
-                                );
-                                ?>
-
-                            </td>
-
-
-                            <td>
-
-                                <span
-                                    class="badge <?php echo lead_status_class($lead['status']); ?>"
-                                >
-
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $lead['status']
-                                    );
-                                    ?>
-
-                                </span>
-
-                            </td>
-
-
-                            <td>
-
-                                <span
-                                    class="badge <?php echo priority_class($lead['priority']); ?>"
-                                >
-
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $lead['priority']
-                                    );
-                                    ?>
-
-                                </span>
-
-                            </td>
-
-
-                            <td>
-
-                                <?php
-                                echo htmlspecialchars(
-                                    $lead['captured_by_name']
-                                    ?? 'Unknown'
-                                );
-                                ?>
-
-                            </td>
-
-
-                            <td>
-
-                                <?php
-                                echo date(
-                                    'd M Y, h:i A',
-                                    strtotime(
-                                        $lead['created_at']
-                                    )
-                                );
-                                ?>
-
-                            </td>
-
-
-                            <td>
-
-                                <a
-                                    href="<?php echo BASE_URL; ?>/leads/view.php?id=<?php echo (int) $lead['lead_id']; ?>"
-                                    class="btn btn-sm btn-outline-primary"
-                                >
-                                    View Lead
-                                </a>
-
-                            </td>
-
-                        </tr>
-
-                    <?php endforeach; ?>
-
-                    </tbody>
-
-                </table>
-
-            </div>
-
-        <?php else: ?>
-
-            <div class="alert alert-light border mb-0">
-
-                No leads have been captured for this event yet.
-
-            </div>
-
-        <?php endif; ?>
-
-    </div>
-
-
-    <!-- ========================================================= -->
-    <!-- EVENT APPOINTMENTS -->
-    <!-- ========================================================= -->
-
-    <div class="hm-card p-4 mb-4">
-
-        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
-
-            <div>
-
-                <h4 class="section-title mb-1">
-                    Event Appointments
-                </h4>
-
-                <div class="hm-muted small">
-                    Appointments connected to leads captured from this event
-                </div>
-
-            </div>
-
-
-            <span class="badge bg-primary">
-
-                <?php
-                echo count($event_appointments);
-                ?>
-
-                Appointment(s)
-
-            </span>
-
-        </div>
-
-
-        <?php if (!empty($event_appointments)): ?>
-
-            <div class="table-responsive">
-
-                <table class="table table-bordered align-middle">
-
-                    <thead class="table-light">
-
-                        <tr>
-
-                            <th>Lead</th>
-
-                            <th>Phone</th>
-
-                            <th>Service</th>
-
-                            <th>Date & Time</th>
-
-                            <th>Type</th>
-
-                            <th>Status</th>
-
-                            <th>Action</th>
-
-                        </tr>
-
-                    </thead>
-
-
-                    <tbody>
-
-                    <?php foreach ($event_appointments as $appointment): ?>
-
-                        <tr>
-
-
-                            <!-- Lead -->
-
-                            <td>
-
-                                <div class="fw-semibold">
-
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $appointment['lead_name']
-                                    );
-                                    ?>
-
-                                </div>
-
-                            </td>
-
-
-                            <!-- Phone -->
-
-                            <td>
-
-                                <?php
-                                echo htmlspecialchars(
                                     $appointment['lead_phone']
                                 );
                                 ?>
@@ -1637,21 +797,18 @@ $page_title = 'Event Details';
                             </td>
 
 
-                            <!-- Service -->
-
                             <td>
 
                                 <?php
                                 echo htmlspecialchars(
-                                    $appointment['service_interest']
-                                    ?: '-'
+                                    $appointment[
+                                        'service_interest'
+                                    ] ?: '-'
                                 );
                                 ?>
 
                             </td>
 
-
-                            <!-- Appointment Date -->
 
                             <td>
 
@@ -1659,14 +816,18 @@ $page_title = 'Event Details';
 
                                 if (
                                     !empty(
-                                        $appointment['appointment_date']
+                                        $appointment[
+                                            'appointment_date'
+                                        ]
                                     )
                                 ) {
 
                                     echo date(
                                         'd M Y, h:i A',
                                         strtotime(
-                                            $appointment['appointment_date']
+                                            $appointment[
+                                                'appointment_date'
+                                            ]
                                         )
                                     );
 
@@ -1681,26 +842,27 @@ $page_title = 'Event Details';
                             </td>
 
 
-                            <!-- Appointment Type -->
-
                             <td>
 
                                 <?php
                                 echo htmlspecialchars(
-                                    $appointment['appointment_type']
-                                    ?: '-'
+                                    $appointment[
+                                        'appointment_type'
+                                    ] ?: '-'
                                 );
                                 ?>
 
                             </td>
 
 
-                            <!-- Appointment Status -->
-
                             <td>
 
                                 <span
-                                    class="badge <?php echo appointment_status_class($appointment['status']); ?>"
+                                    class="badge <?php
+                                    echo appointment_status_class(
+                                        $appointment['status']
+                                    );
+                                    ?>"
                                 >
 
                                     <?php
@@ -1714,8 +876,6 @@ $page_title = 'Event Details';
                             </td>
 
 
-                            <!-- Action -->
-
                             <td>
 
                                 <a
@@ -1727,9 +887,11 @@ $page_title = 'Event Details';
 
                             </td>
 
+
                         </tr>
 
                     <?php endforeach; ?>
+
 
                     </tbody>
 
@@ -1737,15 +899,17 @@ $page_title = 'Event Details';
 
             </div>
 
+
         <?php else: ?>
 
             <div class="alert alert-light border mb-0">
 
-                No appointments have been created for leads from this event yet.
+                No appointments found.
 
             </div>
 
         <?php endif; ?>
+
 
     </div>
 
@@ -1753,10 +917,8 @@ $page_title = 'Event Details';
 </div>
 
 
-<script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-></script>
+<?php
 
-</body>
+require_once __DIR__ . '/../../includes/footer.php';
 
-</html>
+?>

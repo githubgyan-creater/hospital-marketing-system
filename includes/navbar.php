@@ -1,4 +1,4 @@
-<?php
+ <?php
 
 require_once __DIR__ . '/auth.php';
 
@@ -17,18 +17,14 @@ $user = current_user();
             Hospital Marketing
         </a>
 
-
         <button
             class="navbar-toggler"
             type="button"
             data-bs-toggle="collapse"
             data-bs-target="#mainNavbar"
         >
-
             <span class="navbar-toggler-icon"></span>
-
         </button>
-
 
         <div
             class="collapse navbar-collapse"
@@ -39,6 +35,11 @@ $user = current_user();
 
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
+
+                    <!-- ================================================= -->
+                    <!-- ADMIN -->
+                    <!-- ================================================= -->
+
                     <?php if ($user['role'] === 'admin'): ?>
 
                         <li class="nav-item">
@@ -47,10 +48,11 @@ $user = current_user();
                                 class="nav-link text-white"
                                 href="<?php echo BASE_URL; ?>/admin/dashboard.php"
                             >
-                                Dashboard
+                                Admin Dashboard
                             </a>
 
                         </li>
+
 
                         <li class="nav-item">
 
@@ -58,58 +60,130 @@ $user = current_user();
                                 class="nav-link text-white"
                                 href="<?php echo BASE_URL; ?>/admin/users/index.php"
                             >
-                                User Management
+                                Users
                             </a>
 
                         </li>
 
 
-                    <?php elseif ($user['role'] === 'manager'): ?>
-
                         <li class="nav-item">
 
                             <a
                                 class="nav-link text-white"
-                                href="<?php echo BASE_URL; ?>/manager/dashboard.php"
-                            >
-                                Dashboard
-                            </a>
-
-                        </li>
-
-                        <li class="nav-item">
-
-                            <a
-                                class="nav-link text-white"
-                                href="<?php echo BASE_URL; ?>/manager/team/index.php"
-                            >
-                                Team
-                            </a>
-
-                        </li>
-
-                        <li class="nav-item">
-
-                            <a
-                                class="nav-link text-white"
-                                href="<?php echo BASE_URL; ?>/manager/leads/index.php"
-                            >
-                                Leads
-                            </a>
-
-                        </li>
-
-                        <li class="nav-item">
-
-                            <a
-                                class="nav-link text-white"
-                                href="<?php echo BASE_URL; ?>/manager/reports/index.php"
+                                href="<?php echo BASE_URL; ?>/admin/reports/index.php"
                             >
                                 Reports
                             </a>
 
                         </li>
 
+
+                        <li class="nav-item">
+
+                            <a
+                                class="nav-link text-white"
+                                href="<?php echo BASE_URL; ?>/leads/index.php"
+                            >
+                                Leads
+                            </a>
+
+                        </li>
+
+
+                        <li class="nav-item">
+
+                            <a
+                                class="nav-link text-white"
+                                href="<?php echo BASE_URL; ?>/referrals/index.php"
+                            >
+                                Referrals
+                            </a>
+
+                        </li>
+
+
+                        <li class="nav-item">
+
+                            <a
+                                class="nav-link text-white"
+                                href="<?php echo BASE_URL; ?>/events/index.php"
+                            >
+                                Events
+                            </a>
+
+                        </li>
+
+
+                    <!-- ================================================= -->
+                    <!-- MANAGER -->
+                    <!-- ================================================= -->
+
+                    <?php elseif ($user['role'] === 'manager'): ?>
+
+    <!-- Dashboard -->
+    <li class="nav-item">
+        <a
+            class="nav-link text-white"
+            href="<?php echo BASE_URL; ?>/manager/dashboard.php"
+        >
+            Dashboard
+        </a>
+    </li>
+
+ 
+    <!-- Team -->
+    <li class="nav-item">
+        <a
+            class="nav-link text-white"
+            href="<?php echo BASE_URL; ?>/manager/team/index.php"
+        >
+            Team
+        </a>
+    </li>
+
+    <!-- Leads -->
+    <li class="nav-item">
+        <a
+            class="nav-link text-white"
+            href="<?php echo BASE_URL; ?>/manager/leads/index.php"
+        >
+            Leads
+        </a>
+    </li>
+
+    <!-- Appointments -->
+    <li class="nav-item">
+        <a
+            class="nav-link text-white"
+            href="<?php echo BASE_URL; ?>/telecaller/appointments/index.php"
+        >
+            Appointments
+        </a>
+    </li>
+
+    <!-- Events -->
+    <li class="nav-item">
+        <a
+            class="nav-link text-white"
+            href="<?php echo BASE_URL; ?>/events/index.php"
+        >
+            Events
+        </a>
+    </li>
+
+    <!-- Reports -->
+    <li class="nav-item">
+        <a
+            class="nav-link text-white"
+            href="<?php echo BASE_URL; ?>/manager/reports/index.php"
+        >
+            Reports
+        </a>
+    </li>
+
+                    <!-- ================================================= -->
+                    <!-- TELECALLER -->
+                    <!-- ================================================= -->
 
                     <?php elseif ($user['role'] === 'telecaller'): ?>
 
@@ -124,6 +198,7 @@ $user = current_user();
 
                         </li>
 
+
                         <li class="nav-item">
 
                             <a
@@ -134,6 +209,7 @@ $user = current_user();
                             </a>
 
                         </li>
+
 
                         <li class="nav-item">
 
@@ -146,6 +222,7 @@ $user = current_user();
 
                         </li>
 
+
                         <li class="nav-item">
 
                             <a
@@ -157,6 +234,22 @@ $user = current_user();
 
                         </li>
 
+
+                        <li class="nav-item">
+
+                            <a
+                                class="nav-link text-white"
+                                href="<?php echo BASE_URL; ?>/telecaller/appointments/index.php"
+                            >
+                                Appointments
+                            </a>
+
+                        </li>
+
+
+                    <!-- ================================================= -->
+                    <!-- MARKETING EXECUTIVE -->
+                    <!-- ================================================= -->
 
                     <?php elseif ($user['role'] === 'marketing'): ?>
 
@@ -171,35 +264,14 @@ $user = current_user();
 
                         </li>
 
-                        <li class="nav-item">
-
-                            <a
-                                class="nav-link text-white"
-                                href="<?php echo BASE_URL; ?>/marketing/leads/index.php"
-                            >
-                                Leads
-                            </a>
-
-                        </li>
 
                         <li class="nav-item">
 
                             <a
                                 class="nav-link text-white"
-                                href="<?php echo BASE_URL; ?>/marketing/tasks/index.php"
+                                href="<?php echo BASE_URL; ?>/telecaller/appointments/index.php"
                             >
-                                Tasks
-                            </a>
-
-                        </li>
-
-                        <li class="nav-item">
-
-                            <a
-                                class="nav-link text-white"
-                                href="<?php echo BASE_URL; ?>/marketing/visits/index.php"
-                            >
-                                Visits
+                                Appointments
                             </a>
 
                         </li>
@@ -208,6 +280,8 @@ $user = current_user();
 
                 </ul>
 
+
+                <!-- USER NAME + LOGOUT -->
 
                 <div class="d-flex align-items-center">
 

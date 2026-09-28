@@ -1,16 +1,69 @@
-<?php
+ <?php
 
-require_once __DIR__ . '/../includes/role_check.php';
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../config/database.php';
 
-require_role('admin', 'manager');
+require_login();
 
 $user = current_user();
 
+if (!$user || empty($user['id'])) {
+    http_response_code(403);
+    exit('Access denied.');
+}
+
+
 /*
 |--------------------------------------------------------------------------
-| Date / Time
+| Verify Manager/Admin Role Directly From Database
 |--------------------------------------------------------------------------
+*/
+
+$stmt = $pdo->prepare("
+    SELECT
+        r.name AS role_name
+    FROM users u
+    INNER JOIN roles r
+        ON u.role_id = r.id
+    WHERE u.id = ?
+      AND u.status = 'active'
+    LIMIT 1
+");
+
+$stmt->execute([
+    $user['id']
+]);
+
+$role_record = $stmt->fetch();
+
+if (!$role_record) {
+    http_response_code(403);
+    exit('Access denied.');
+}
+
+$current_role = normalize_role_name(
+    $role_record['role_name']
+);
+
+if (
+    !in_array(
+        $current_role,
+        ['admin', 'manager'],
+        true
+    )
+) {
+    http_response_code(403);
+    exit('Access denied.');
+}
+
+$_SESSION['user']['role'] = $current_role;
+
+
+/*
+
+| Date / Time
+
 */
 
 $today = date('Y-m-d');
@@ -20,9 +73,9 @@ $month_start = date('Y-m-01');
 $month_end = date('Y-m-t');
 
 /*
-|--------------------------------------------------------------------------
+
 | Today's Leads
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -39,9 +92,9 @@ $todays_leads = (int) $stmt->fetchColumn();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Follow-ups Due Today
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -60,9 +113,9 @@ $followups_due = (int) $stmt->fetchColumn();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Appointments Today
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -80,9 +133,9 @@ $appointments_today = (int) $stmt->fetchColumn();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Active Events
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -100,9 +153,9 @@ $active_events = (int) $stmt->fetchColumn();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | New Leads
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -117,9 +170,9 @@ $new_leads = (int) $stmt->fetchColumn();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Converted Leads - Current Month
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -138,9 +191,9 @@ $converted_leads = (int) $stmt->fetchColumn();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Overdue Follow-ups
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -157,9 +210,9 @@ $overdue_followups = (int) $stmt->fetchColumn();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Today's Team Activities
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -176,9 +229,9 @@ $todays_activities = (int) $stmt->fetchColumn();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Today's Leads List
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -213,9 +266,9 @@ $todays_leads_list = $stmt->fetchAll();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Follow-ups Due / Overdue List
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -249,9 +302,9 @@ $followups_list = $stmt->fetchAll();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Today's Appointments List
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -286,9 +339,9 @@ $todays_appointments = $stmt->fetchAll();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Active Events List
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -318,9 +371,9 @@ $active_events_list = $stmt->fetchAll();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Recent Team Activity
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->query("
@@ -352,9 +405,9 @@ $team_activities = $stmt->fetchAll();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Helper Functions
-|--------------------------------------------------------------------------
+
 */
 
 function status_class(string $status): string
@@ -765,12 +818,9 @@ $page_title = 'Manager Control Center';
 
         <div class="d-flex flex-wrap gap-2">
 
-            <a
-                href="<?php echo BASE_URL; ?>/manager/leads/index.php"
-                class="btn btn-outline-primary"
-            >
-                Leads
-            </a>
+            <a href="<?php echo BASE_URL; ?>/manager/leads/index.php" class="btn btn-outline-primary">
+    Leads
+</a>
 
             <a
                 href="<?php echo BASE_URL; ?>/events/index.php"

@@ -1,21 +1,26 @@
+ <?php
 
-<?php
-require_once __DIR__. '/../../config/database.php';
-require_once __DIR__. '/../../includes/role_check.php';
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/role_check.php';
+
 require_role('admin');
 
-$page_title = 'user_management';
-require_once __DIR__. '/../../includes/header.php';
+$page_title = 'User Management';
 
+require_once __DIR__ . '/../../includes/header.php';
 
 ?>
 
-
 <div class="container py-4">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <!-- ========================================================= -->
+    <!-- PAGE HEADER -->
+    <!-- ========================================================= -->
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
 
         <div>
+
             <h1 class="hm-page-title mb-1">
                 User Management
             </h1>
@@ -23,6 +28,7 @@ require_once __DIR__. '/../../includes/header.php';
             <p class="hm-muted mb-0">
                 Manage hospital marketing team accounts.
             </p>
+
         </div>
 
         <a
@@ -35,6 +41,10 @@ require_once __DIR__. '/../../includes/header.php';
     </div>
 
 
+    <!-- ========================================================= -->
+    <!-- USER TABLE -->
+    <!-- ========================================================= -->
+
     <div class="hm-card p-4">
 
         <div class="table-responsive">
@@ -44,6 +54,7 @@ require_once __DIR__. '/../../includes/header.php';
                 <thead>
 
                     <tr>
+
                         <th>#</th>
                         <th>Name</th>
                         <th>Email</th>
@@ -51,124 +62,184 @@ require_once __DIR__. '/../../includes/header.php';
                         <th>Status</th>
                         <th>Created</th>
                         <th>Action</th>
+
                     </tr>
 
                 </thead>
 
+
                 <tbody>
 
-                    <?php
+                <?php
 
-                    $stmt = $pdo->query("
-                        SELECT
-                            u.id,
-                            u.name,
-                            u.email,
-                            u.status,
-                            u.created_at,
-                            r.display_name AS role_name
-                        FROM users u
-                        INNER JOIN roles r
-                            ON u.role_id = r.id
-                        ORDER BY u.id DESC
-                    ");
+                $stmt = $pdo->query("
+                    SELECT
+                        u.id,
+                        u.name,
+                        u.email,
+                        u.status,
+                        u.created_at,
+                        r.display_name AS role_name
 
-                    $users = $stmt->fetchAll();
+                    FROM users u
 
-                    ?>
+                    INNER JOIN roles r
+                        ON u.role_id = r.id
 
-                    <?php if (empty($users)): ?>
+                    ORDER BY u.id DESC
+                ");
+
+                $users = $stmt->fetchAll();
+
+                ?>
+
+
+                <?php if (empty($users)): ?>
+
+                    <tr>
+
+                        <td
+                            colspan="7"
+                            class="text-center text-muted py-4"
+                        >
+                            No staff accounts found.
+                        </td>
+
+                    </tr>
+
+                <?php else: ?>
+
+
+                    <?php foreach ($users as $index => $user): ?>
 
                         <tr>
 
-                            <td
-                                colspan="7"
-                                class="text-center text-muted py-4"
-                            >
-                                No staff accounts found.
+                            <!-- Number -->
+
+                            <td>
+
+                                <?php
+                                echo $index + 1;
+                                ?>
+
                             </td>
 
-                        </tr>
 
-                    <?php else: ?>
+                            <!-- Name -->
 
-                        <?php foreach ($users as $index => $user): ?>
+                            <td>
 
-                            <tr>
+                                <strong>
 
-                                <td>
-                                    <?php echo $index + 1; ?>
-                                </td>
-
-                                <td>
                                     <?php
                                     echo htmlspecialchars(
                                         $user['name']
                                     );
                                     ?>
-                                </td>
 
-                                <td>
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $user['email']
-                                    );
-                                    ?>
-                                </td>
+                                </strong>
 
-                                <td>
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $user['role_name']
-                                    );
-                                    ?>
-                                </td>
+                            </td>
 
-                                <td>
 
-                                    <?php if ($user['status'] === 'active'): ?>
+                            <!-- Email -->
 
-                                        <span class="badge bg-success">
-                                            Active
-                                        </span>
+                            <td>
 
-                                    <?php else: ?>
+                                <?php
+                                echo htmlspecialchars(
+                                    $user['email']
+                                );
+                                ?>
 
-                                        <span class="badge bg-secondary">
-                                            Inactive
-                                        </span>
+                            </td>
 
-                                    <?php endif; ?>
 
-                                </td>
+                            <!-- Role -->
 
-                                <td>
-                                    <?php
-                                    echo date(
-                                        'd M Y',
-                                        strtotime(
-                                            $user['created_at']
-                                        )
-                                    );
-                                    ?>
-                                </td>
+                            <td>
 
-                                <td>
+                                <?php
+                                echo htmlspecialchars(
+                                    $user['role_name']
+                                );
+                                ?>
+
+                            </td>
+
+
+                            <!-- Status -->
+
+                            <td>
+
+                                <?php if ($user['status'] === 'active'): ?>
+
+                                    <span class="badge bg-success">
+                                        Active
+                                    </span>
+
+                                <?php else: ?>
+
+                                    <span class="badge bg-secondary">
+                                        Inactive
+                                    </span>
+
+                                <?php endif; ?>
+
+                            </td>
+
+
+                            <!-- Created -->
+
+                            <td>
+
+                                <?php
+                                echo date(
+                                    'd M Y',
+                                    strtotime(
+                                        $user['created_at']
+                                    )
+                                );
+                                ?>
+
+                            </td>
+
+
+                            <!-- Actions -->
+
+                            <td>
+
+                                <div class="d-flex flex-wrap gap-2">
+
+                                    <!-- View -->
 
                                     <a
-                                        href="<?php echo BASE_URL; ?>/admin/users/edit.php?id=<?php echo $user['id']; ?>"
+                                        href="<?php echo BASE_URL; ?>/admin/users/view.php?id=<?php echo (int) $user['id']; ?>"
+                                        class="btn btn-sm btn-outline-secondary"
+                                    >
+                                        View
+                                    </a>
+
+
+                                    <!-- Edit -->
+
+                                    <a
+                                        href="<?php echo BASE_URL; ?>/admin/users/edit.php?id=<?php echo (int) $user['id']; ?>"
                                         class="btn btn-sm btn-outline-primary"
                                     >
                                         Edit
                                     </a>
 
-                                </td>
+                                </div>
 
-                            </tr>
+                            </td>
 
-                        <?php endforeach; ?>
+                        </tr>
 
-                    <?php endif; ?>
+                    <?php endforeach; ?>
+
+
+                <?php endif; ?>
 
                 </tbody>
 
@@ -179,8 +250,9 @@ require_once __DIR__. '/../../includes/header.php';
     </div>
 
 </div>
+
 <?php
 
-require_once __DIR__. '/../../includes/footer.php';
+require_once __DIR__ . '/../../includes/footer.php';
 
 ?>
