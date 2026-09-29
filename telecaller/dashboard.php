@@ -265,15 +265,15 @@ require_once __DIR__ . '/../includes/header.php';
         <div>
 
             <h2 class="hm-page-title mb-1">
-                My Day
+                Telecaller Dashboard
             </h2>
 
             <p class="hm-muted mb-0">
 
                 Welcome,
-                <?php echo htmlspecialchars($user['name']); ?>.
+                <?php echo htmlspecialchars($user['name']); ?>
 
-                Here is your telecaller work for today.
+                <!-- Here is your telecaller work for today -->
 
             </p>
 
@@ -393,6 +393,13 @@ require_once __DIR__ . '/../includes/header.php';
             >
                 Follow-ups
             </a>
+
+            <a
+    href="<?php echo BASE_URL; ?>/telecaller/performance/"
+    class="btn btn-outline-primary"
+>
+    My Performance
+</a>
 
             <a
                 href="<?php echo BASE_URL; ?>/telecaller/appointments/"

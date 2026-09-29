@@ -46,74 +46,211 @@ $user = current_user();
 
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
+<!-- ADMIN -->
 
-                    <!-- ADMIN -->
+<?php if ($user['role'] === 'admin'): ?>
 
-                    <?php if ($user['role'] === 'admin'): ?>
+    <!-- DASHBOARD -->
 
-                        <li class="nav-item">
-                            <a
-                                class="nav-link text-white"
-                                href="<?php echo BASE_URL; ?>/admin/dashboard.php"
-                            >
-                                Dashboard
-                            </a>
-                        </li>
+    <li class="nav-item">
 
-                        <li class="nav-item">
-                            <a
-                                class="nav-link text-white"
-                                href="<?php echo BASE_URL; ?>/admin/users/index.php"
-                            >
-                                Users
-                            </a>
-                        </li>
+        <a
+            class="nav-link text-white"
+            href="<?php echo BASE_URL; ?>/admin/dashboard.php"
+        >
+            Dashboard
+        </a>
 
-                        <li class="nav-item">
-                            <a
-                                class="nav-link text-white"
-                                href="<?php echo BASE_URL; ?>/admin/reports/index.php"
-                            >
-                                Reports
-                            </a>
-                        </li>
+    </li>
 
-                        <li class="nav-item">
-                            <a
-                                class="nav-link text-white"
-                                href="<?php echo BASE_URL; ?>/leads/index.php"
-                            >
-                                Leads
-                            </a>
-                        </li>
 
-                        <li class="nav-item">
-                            <a
-                                class="nav-link text-white"
-                                href="<?php echo BASE_URL; ?>/referrals/index.php"
-                            >
-                                Referrals
-                            </a>
-                        </li>
+    <!-- MASTER DATA DROPDOWN -->
 
-                        <li class="nav-item">
-    <a
-        class="nav-link text-white"
-        href="<?php echo BASE_URL; ?>/campaigns/index.php"
-    >
-        Campaigns
-    </a>
-</li>
+    <li class="nav-item dropdown">
 
-                        <li class="nav-item">
-                            <a
-                                class="nav-link text-white"
-                                href="<?php echo BASE_URL; ?>/events/index.php"
-                            >
-                                Events
-                            </a>
-                        </li>
+        <a
+            class="nav-link dropdown-toggle text-white"
+            href="#"
+            id="adminMasterDropdown"
+            role="button"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+        >
+            Master Data
+        </a>
 
+        <ul
+            class="dropdown-menu"
+            aria-labelledby="adminMasterDropdown"
+        >
+
+            <li>
+                <a
+                    class="dropdown-item"
+                    href="<?php echo BASE_URL; ?>/admin/hospital/"
+                >
+                    Hospital Master
+                </a>
+            </li>
+
+            <li>
+                <a
+                    class="dropdown-item"
+                    href="<?php echo BASE_URL; ?>/admin/departments/"
+                >
+                    Departments
+                </a>
+            </li>
+
+            <li>
+                <a
+                    class="dropdown-item"
+                    href="<?php echo BASE_URL; ?>/admin/doctors/"
+                >
+                    Doctors
+                </a>
+            </li>
+
+            <li>
+                <a
+                    class="dropdown-item"
+                    href="<?php echo BASE_URL; ?>/admin/services/"
+                >
+                    Services
+                </a>
+            </li>
+
+        </ul>
+
+    </li>
+
+
+    <!-- OPERATIONS DROPDOWN -->
+
+    <li class="nav-item dropdown">
+
+        <a
+            class="nav-link dropdown-toggle text-white"
+            href="#"
+            id="adminOperationsDropdown"
+            role="button"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+        >
+            Operations
+        </a>
+
+        <ul
+            class="dropdown-menu"
+            aria-labelledby="adminOperationsDropdown"
+        >
+
+            <li>
+                <a
+                    class="dropdown-item"
+                    href="<?php echo BASE_URL; ?>/leads/index.php"
+                >
+                    Leads
+                </a>
+            </li>
+
+            <li>
+                <a
+                    class="dropdown-item"
+                    href="<?php echo BASE_URL; ?>/referrals/index.php"
+                >
+                    Referrals
+                </a>
+            </li>
+
+            <li>
+                <a
+                    class="dropdown-item"
+                    href="<?php echo BASE_URL; ?>/campaigns/index.php"
+                >
+                    Campaigns
+                </a>
+            </li>
+
+            <li>
+                <a
+                    class="dropdown-item"
+                    href="<?php echo BASE_URL; ?>/events/index.php"
+                >
+                    Events
+                </a>
+            </li>
+
+        </ul>
+
+    </li>
+
+
+    <!-- ADMINISTRATION DROPDOWN -->
+
+    <li class="nav-item dropdown">
+
+        <a
+            class="nav-link dropdown-toggle text-white"
+            href="#"
+            id="adminAdministrationDropdown"
+            role="button"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+        >
+            Administration
+        </a>
+
+        <ul
+            class="dropdown-menu"
+            aria-labelledby="adminAdministrationDropdown"
+        >
+
+            <li>
+                <a
+                    class="dropdown-item"
+                    href="<?php echo BASE_URL; ?>/admin/users/index.php"
+                >
+                    Users
+                </a>
+            </li>
+
+            <li>
+                <a
+                    class="dropdown-item"
+                    href="<?php echo BASE_URL; ?>/admin/roles/"
+                >
+                    Roles & Permissions
+                </a>
+            </li>
+
+            <li>
+                <a
+                    class="dropdown-item"
+                    href="<?php echo BASE_URL; ?>/admin/settings/"
+                >
+                    Settings
+                </a>
+            </li>
+
+        </ul>
+
+    </li>
+
+
+    <!-- REPORTS -->
+
+    <li class="nav-item">
+
+        <a
+            class="nav-link text-white"
+            href="<?php echo BASE_URL; ?>/admin/reports/index.php"
+        >
+            Reports
+        </a>
+
+    </li>
+                     
 
                     <!-- MANAGER -->
  
@@ -338,7 +475,7 @@ $user = current_user();
                                 class="nav-link text-white"
                                 href="<?php echo BASE_URL; ?>/telecaller/dashboard.php"
                             >
-                                My Day
+                                 Dashboard
                             </a>
                         </li>
 
@@ -388,7 +525,7 @@ $user = current_user();
                                 class="nav-link text-white"
                                 href="<?php echo BASE_URL; ?>/marketing/dashboard.php"
                             >
-                                My Day
+                            Dashboard
                             </a>
                         </li>
 

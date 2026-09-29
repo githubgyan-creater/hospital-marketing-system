@@ -103,7 +103,7 @@ require_once __DIR__ . '/../includes/header.php';
         </span> -->
 
         <h1 class="hm-page-title mt-2 mb-1">
-            My Day
+        Marketing Executive Dashboard
         </h1>
 
         <p class="hm-muted mb-0">
