@@ -1,67 +1,102 @@
  <?php
 
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/role_check.php';
+require_once __DIR__ . '/../../includes/permission_check.php';
 
 require_role('admin');
+require_permission('users.view');
 
-$page_title = 'User Management';
+$page_title = 'Staff Management';
+
+/*
+|--------------------------------------------------------------------------
+| Get all staff users
+|--------------------------------------------------------------------------
+*/
+$stmt = $pdo->query("
+    SELECT
+        u.id,
+        u.name,
+        u.email,
+        u.status,
+        u.created_at,
+        r.name AS role_name,
+        r.display_name AS role_display_name
+    FROM users u
+    LEFT JOIN roles r
+        ON u.role_id = r.id
+    ORDER BY u.id DESC
+");
+
+$users = $stmt->fetchAll();
+
+/*
+|--------------------------------------------------------------------------
+| Current logged-in user
+|--------------------------------------------------------------------------
+*/
+$current_user = current_user();
 
 require_once __DIR__ . '/../../includes/header.php';
-
 ?>
 
 <div class="container py-4">
 
-    <!-- ========================================================= -->
-    <!-- PAGE HEADER -->
-    <!-- ========================================================= -->
-
-    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
 
         <div>
-
             <h1 class="hm-page-title mb-1">
-                User Management
+                Staff Management
             </h1>
 
             <p class="hm-muted mb-0">
-                Manage hospital marketing team accounts.
+                Manage hospital marketing staff accounts.
             </p>
-
         </div>
 
-        <a
-            href="<?php echo BASE_URL; ?>/admin/users/add.php"
-            class="btn btn-hm-primary"
-        >
-            + Add Staff
-        </a>
+        <?php if (has_permission('users.create')): ?>
+
+            <a
+                href="<?php echo BASE_URL; ?>/admin/users/add.php"
+                class="btn btn-hm-primary"
+            >
+                + Add Staff
+            </a>
+
+        <?php endif; ?>
 
     </div>
 
 
-    <!-- ========================================================= -->
-    <!-- USER TABLE -->
-    <!-- ========================================================= -->
-
-    <div class="hm-card p-4">
+    <!-- Staff Table -->
+    <div class="hm-card">
 
         <div class="table-responsive">
 
-            <table class="table align-middle">
+            <table class="table table-hover align-middle mb-0">
 
                 <thead>
 
                     <tr>
 
                         <th>#</th>
+
                         <th>Name</th>
+
                         <th>Email</th>
+
                         <th>Role</th>
+
                         <th>Status</th>
+
                         <th>Created</th>
-                        <th>Action</th>
+
+                        <th class="text-end">
+                            Actions
+                        </th>
 
                     </tr>
 
@@ -70,39 +105,19 @@ require_once __DIR__ . '/../../includes/header.php';
 
                 <tbody>
 
-                <?php
-
-                $stmt = $pdo->query("
-                    SELECT
-                        u.id,
-                        u.name,
-                        u.email,
-                        u.status,
-                        u.created_at,
-                        r.display_name AS role_name
-
-                    FROM users u
-
-                    INNER JOIN roles r
-                        ON u.role_id = r.id
-
-                    ORDER BY u.id DESC
-                ");
-
-                $users = $stmt->fetchAll();
-
-                ?>
-
-
                 <?php if (empty($users)): ?>
 
                     <tr>
 
                         <td
                             colspan="7"
-                            class="text-center text-muted py-4"
+                            class="text-center py-5"
                         >
-                            No staff accounts found.
+
+                            <div class="hm-muted">
+                                No staff accounts found.
+                            </div>
+
                         </td>
 
                     </tr>
@@ -110,45 +125,42 @@ require_once __DIR__ . '/../../includes/header.php';
                 <?php else: ?>
 
 
-                    <?php foreach ($users as $index => $user): ?>
+                    <?php foreach ($users as $user): ?>
 
                         <tr>
 
-                            <!-- Number -->
-
+                            <!-- ID -->
                             <td>
-
-                                <?php
-                                echo $index + 1;
-                                ?>
-
+                                <?php echo (int) $user['id']; ?>
                             </td>
 
 
                             <!-- Name -->
-
                             <td>
 
-                                <strong>
+                                <div class="fw-semibold">
 
                                     <?php
                                     echo htmlspecialchars(
-                                        $user['name']
+                                        $user['name'],
+                                        ENT_QUOTES,
+                                        'UTF-8'
                                     );
                                     ?>
 
-                                </strong>
+                                </div>
 
                             </td>
 
 
                             <!-- Email -->
-
                             <td>
 
                                 <?php
                                 echo htmlspecialchars(
-                                    $user['email']
+                                    $user['email'],
+                                    ENT_QUOTES,
+                                    'UTF-8'
                                 );
                                 ?>
 
@@ -156,20 +168,37 @@ require_once __DIR__ . '/../../includes/header.php';
 
 
                             <!-- Role -->
-
                             <td>
 
                                 <?php
-                                echo htmlspecialchars(
-                                    $user['role_name']
-                                );
+
+                                $role_display =
+                                    !empty($user['role_display_name'])
+                                        ? $user['role_display_name']
+                                        : $user['role_name'];
+
+                                if (empty($role_display)) {
+                                    $role_display = 'Unknown';
+                                }
+
                                 ?>
+
+                                <span class="badge bg-light text-dark">
+
+                                    <?php
+                                    echo htmlspecialchars(
+                                        $role_display,
+                                        ENT_QUOTES,
+                                        'UTF-8'
+                                    );
+                                    ?>
+
+                                </span>
 
                             </td>
 
 
                             <!-- Status -->
-
                             <td>
 
                                 <?php if ($user['status'] === 'active'): ?>
@@ -189,46 +218,118 @@ require_once __DIR__ . '/../../includes/header.php';
                             </td>
 
 
-                            <!-- Created -->
-
+                            <!-- Created Date -->
                             <td>
 
                                 <?php
-                                echo date(
-                                    'd M Y',
-                                    strtotime(
-                                        $user['created_at']
-                                    )
-                                );
+
+                                if (!empty($user['created_at'])) {
+
+                                    echo date(
+                                        'd M Y',
+                                        strtotime($user['created_at'])
+                                    );
+
+                                } else {
+
+                                    echo '-';
+
+                                }
+
                                 ?>
 
                             </td>
 
 
                             <!-- Actions -->
+                            <td class="text-end">
 
-                            <td>
-
-                                <div class="d-flex flex-wrap gap-2">
-
-                                    <!-- View -->
-
-                                    <a
-                                        href="<?php echo BASE_URL; ?>/admin/users/view.php?id=<?php echo (int) $user['id']; ?>"
-                                        class="btn btn-sm btn-outline-secondary"
-                                    >
-                                        View
-                                    </a>
+                                <div
+                                    class="d-flex justify-content-end gap-1 flex-wrap"
+                                >
 
 
-                                    <!-- Edit -->
+                                    <!-- VIEW -->
+                                    <?php if (has_permission('users.view')): ?>
 
-                                    <a
-                                        href="<?php echo BASE_URL; ?>/admin/users/edit.php?id=<?php echo (int) $user['id']; ?>"
-                                        class="btn btn-sm btn-outline-primary"
-                                    >
-                                        Edit
-                                    </a>
+                                        <a
+                                            href="<?php echo BASE_URL; ?>/admin/users/view.php?id=<?php echo (int) $user['id']; ?>"
+                                            class="btn btn-sm btn-outline-primary"
+                                        >
+                                            View
+                                        </a>
+
+                                    <?php endif; ?>
+
+
+                                    <!-- EDIT -->
+                                    <?php if (has_permission('users.edit')): ?>
+
+                                        <a
+                                            href="<?php echo BASE_URL; ?>/admin/users/edit.php?id=<?php echo (int) $user['id']; ?>"
+                                            class="btn btn-sm btn-outline-secondary"
+                                        >
+                                            Edit
+                                        </a>
+
+                                    <?php endif; ?>
+
+
+                                    <?php
+
+                                    /*
+                                    |--------------------------------------------------------------------------
+                                    | Check if this is the currently logged-in user
+                                    |--------------------------------------------------------------------------
+                                    */
+
+                                    $is_current_user = false;
+
+                                    if (
+                                        $current_user &&
+                                        isset($current_user['id']) &&
+                                        (int) $current_user['id'] === (int) $user['id']
+                                    ) {
+
+                                        $is_current_user = true;
+
+                                    }
+
+                                    ?>
+
+
+                                    <!-- DELETE -->
+                                    <?php
+                                    if (
+                                        has_permission('users.delete')
+                                        && !$is_current_user
+                                    ):
+                                    ?>
+
+                                        <form
+                                            method="POST"
+                                            action="<?php echo BASE_URL; ?>/admin/users/delete.php"
+                                            class="d-inline"
+                                            onsubmit="return confirm('Are you sure you want to delete this staff account?');"
+                                        >
+
+                                            <input
+                                                type="hidden"
+                                                name="id"
+                                                value="<?php echo (int) $user['id']; ?>"
+                                            >
+
+                                            <button
+                                                type="submit"
+                                                class="btn btn-sm btn-outline-danger"
+                                            >
+                                                Delete
+                                            </button>
+
+                                        </form>
+
+                                    <?php endif; ?>
+
 
                                 </div>
 
@@ -250,6 +351,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 
 </div>
+
 
 <?php
 

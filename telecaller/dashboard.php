@@ -264,9 +264,9 @@ require_once __DIR__ . '/../includes/header.php';
 
         <div>
 
-            <h2 class="hm-page-title mb-1">
+            <h1 class="hm-page-title mb-1">
                 Telecaller Dashboard
-            </h2>
+            </h1>
 
             <p class="hm-muted mb-0">
 

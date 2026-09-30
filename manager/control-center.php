@@ -9,15 +9,16 @@ require_login();
 $user = current_user();
 
 if (!$user || empty($user['id'])) {
+
     http_response_code(403);
     exit('Access denied.');
 }
 
 
 /*
-|--------------------------------------------------------------------------
+-
 | Verify Manager/Admin Role Directly From Database
-|--------------------------------------------------------------------------
+-
 */
 
 $stmt = $pdo->prepare("
@@ -38,6 +39,7 @@ $stmt->execute([
 $role_record = $stmt->fetch();
 
 if (!$role_record) {
+
     http_response_code(403);
     exit('Access denied.');
 }
@@ -53,17 +55,25 @@ if (
         true
     )
 ) {
+
     http_response_code(403);
     exit('Access denied.');
 }
+
+
+/*
+-
+| Keep Session Role Updated
+-
+*/
 
 $_SESSION['user']['role'] = $current_role;
 
 
 /*
-
+-
 | Date / Time
-
+-
 */
 
 $today = date('Y-m-d');
@@ -72,10 +82,11 @@ $month_start = date('Y-m-01');
 
 $month_end = date('Y-m-t');
 
+
 /*
-
+-
 | Today's Leads
-
+-
 */
 
 $stmt = $pdo->prepare("
@@ -92,9 +103,9 @@ $todays_leads = (int) $stmt->fetchColumn();
 
 
 /*
-
+-
 | Follow-ups Due Today
-
+-
 */
 
 $stmt = $pdo->prepare("
@@ -113,9 +124,9 @@ $followups_due = (int) $stmt->fetchColumn();
 
 
 /*
-
+-
 | Appointments Today
-
+-
 */
 
 $stmt = $pdo->prepare("
@@ -133,9 +144,9 @@ $appointments_today = (int) $stmt->fetchColumn();
 
 
 /*
-
+-
 | Active Events
-
+-
 */
 
 $stmt = $pdo->prepare("
@@ -153,9 +164,9 @@ $active_events = (int) $stmt->fetchColumn();
 
 
 /*
-
+-
 | New Leads
-
+-
 */
 
 $stmt = $pdo->prepare("
@@ -170,9 +181,9 @@ $new_leads = (int) $stmt->fetchColumn();
 
 
 /*
-
+-
 | Converted Leads - Current Month
-
+-
 */
 
 $stmt = $pdo->prepare("
@@ -191,9 +202,9 @@ $converted_leads = (int) $stmt->fetchColumn();
 
 
 /*
-
+-
 | Overdue Follow-ups
-
+-
 */
 
 $stmt = $pdo->prepare("
@@ -210,9 +221,9 @@ $overdue_followups = (int) $stmt->fetchColumn();
 
 
 /*
-
+-
 | Today's Team Activities
-
+-
 */
 
 $stmt = $pdo->prepare("
@@ -229,9 +240,9 @@ $todays_activities = (int) $stmt->fetchColumn();
 
 
 /*
-
+-
 | Today's Leads List
-
+-
 */
 
 $stmt = $pdo->prepare("
@@ -245,16 +256,11 @@ $stmt = $pdo->prepare("
         l.next_action_type,
         l.next_action_at,
         u.name AS assigned_staff
-
     FROM leads l
-
     LEFT JOIN users u
         ON l.assigned_to = u.id
-
     WHERE DATE(l.created_at) = ?
-
     ORDER BY l.created_at DESC
-
     LIMIT 10
 ");
 
@@ -262,13 +268,13 @@ $stmt->execute([
     $today
 ]);
 
-$todays_leads_list = $stmt->fetchAll();
+$todays_leads_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 
 /*
-
+-
 | Follow-ups Due / Overdue List
-
+-
 */
 
 $stmt = $pdo->prepare("
@@ -281,30 +287,25 @@ $stmt = $pdo->prepare("
         l.next_action_type,
         l.next_action_at,
         u.name AS assigned_staff
-
     FROM leads l
-
     LEFT JOIN users u
         ON l.assigned_to = u.id
-
     WHERE l.next_action_at IS NOT NULL
       AND l.next_action_at <= DATE_ADD(NOW(), INTERVAL 1 DAY)
       AND l.status NOT IN ('Converted', 'Lost')
-
     ORDER BY l.next_action_at ASC
-
     LIMIT 10
 ");
 
 $stmt->execute();
 
-$followups_list = $stmt->fetchAll();
+$followups_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 
 /*
-
+-
 | Today's Appointments List
-
+-
 */
 
 $stmt = $pdo->prepare("
@@ -314,20 +315,14 @@ $stmt = $pdo->prepare("
         a.appointment_date,
         a.appointment_type,
         a.status,
-
         l.name AS lead_name,
         l.phone AS lead_phone,
         l.service_interest
-
     FROM appointments a
-
     INNER JOIN leads l
         ON a.lead_id = l.id
-
     WHERE DATE(a.appointment_date) = ?
-
     ORDER BY a.appointment_date ASC
-
     LIMIT 10
 ");
 
@@ -335,13 +330,13 @@ $stmt->execute([
     $today
 ]);
 
-$todays_appointments = $stmt->fetchAll();
+$todays_appointments = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 
 /*
-
+-
 | Active Events List
-
+-
 */
 
 $stmt = $pdo->prepare("
@@ -352,14 +347,10 @@ $stmt = $pdo->prepare("
         event_date,
         location,
         status
-
     FROM events
-
     WHERE status IN ('Planned', 'Ongoing')
       AND event_date >= ?
-
     ORDER BY event_date ASC
-
     LIMIT 10
 ");
 
@@ -367,13 +358,13 @@ $stmt->execute([
     $today
 ]);
 
-$active_events_list = $stmt->fetchAll();
+$active_events_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 
 /*
-
+-
 | Recent Team Activity
-
+-
 */
 
 $stmt = $pdo->query("
@@ -382,32 +373,25 @@ $stmt = $pdo->query("
         la.activity_type,
         la.description,
         la.activity_at,
-
         u.name AS user_name,
-
         l.id AS lead_id,
         l.name AS lead_name
-
     FROM lead_activities la
-
     INNER JOIN users u
         ON la.user_id = u.id
-
     INNER JOIN leads l
         ON la.lead_id = l.id
-
     ORDER BY la.activity_at DESC
-
     LIMIT 10
 ");
 
-$team_activities = $stmt->fetchAll();
+$team_activities = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 
 /*
-
+-
 | Helper Functions
-
+-
 */
 
 function status_class(string $status): string
@@ -475,119 +459,97 @@ function priority_class(string $priority): string
 }
 
 
+/*
+-
+| PAGE TITLE
+-
+*/
+
 $page_title = 'Manager Control Center';
+
+
+/*
+-
+| SHARED HEADER
+-
+| This loads the project's common navbar.
+-
+*/
+
+require_once __DIR__ . '/../includes/header.php';
 
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
+<style>
 
-<head>
+    .control-center-body {
+        background: #f7f5ef;
+    }
 
-    <meta charset="UTF-8">
+    .control-center-card {
+        background: #ffffff;
+        border: 1px solid #e5e1d7;
+        border-radius: 14px;
+        box-shadow: 0 4px 18px rgba(23, 50, 77, 0.06);
+    }
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+    .section-title {
+        color: #17324d;
+        font-weight: 700;
+    }
 
-    <title>
-        Manager Control Center
-    </title>
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #17324d;
+    }
 
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-    >
+    .metric-label {
+        color: #71808c;
+        font-size: 0.9rem;
+    }
 
-    <style>
+    .activity-item {
+        border-bottom: 1px solid #eeeeee;
+        padding: 12px 0;
+    }
 
-        body {
-            background: #f7f5ef;
-            color: #243746;
-        }
+    .activity-item:last-child {
+        border-bottom: none;
+    }
 
-        .hm-card {
-            background: #ffffff;
-            border: 1px solid #e5e1d7;
-            border-radius: 14px;
-            box-shadow: 0 4px 18px rgba(23, 50, 77, 0.06);
-        }
+    .table th {
+        white-space: nowrap;
+    }
 
-        .hm-primary {
-            background: #17324d;
-            color: #ffffff;
-            border: none;
-        }
+    .small-action {
+        font-size: 0.82rem;
+    }
 
-        .hm-primary:hover {
-            background: #12283d;
-            color: #ffffff;
-        }
+</style>
 
-        .hm-muted {
-            color: #71808c;
-        }
-
-        .section-title {
-            color: #17324d;
-            font-weight: 700;
-        }
-
-        .metric-value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #17324d;
-        }
-
-        .metric-label {
-            color: #71808c;
-            font-size: 0.9rem;
-        }
-
-        .activity-item {
-            border-bottom: 1px solid #eeeeee;
-            padding: 12px 0;
-        }
-
-        .activity-item:last-child {
-            border-bottom: none;
-        }
-
-        .table th {
-            white-space: nowrap;
-        }
-
-        .small-action {
-            font-size: 0.82rem;
-        }
-
-    </style>
-
-</head>
-
-<body>
 
 <div class="container py-4">
 
 
-    <!-- ========================================================= -->
-    <!-- PAGE HEADER -->
-    <!-- ========================================================= -->
+    <!--  
+         PAGE HEADER
+      -->
 
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
 
         <div>
 
-            <h2 class="mb-1">
+            <h1 class="hm-page-title mb-1">
                 Manager Control Center
-            </h2>
+            </h1>
 
             <p class="hm-muted mb-0">
                 Monitor today's hospital marketing operations.
             </p>
 
         </div>
+
 
         <div class="mt-3 mt-md-0">
 
@@ -604,18 +566,18 @@ $page_title = 'Manager Control Center';
     </div>
 
 
-    <!-- ========================================================= -->
-    <!-- TOP METRICS -->
-    <!-- ========================================================= -->
+    <!-- =========================================================
+         TOP METRICS
+    ========================================================== -->
 
     <div class="row g-3 mb-4">
 
 
-        <!-- Today's Leads -->
+        <!-- TODAY'S LEADS -->
 
         <div class="col-md-6 col-lg-3">
 
-            <div class="hm-card p-4 h-100">
+            <div class="control-center-card p-4 h-100">
 
                 <div class="metric-label">
                     Today's Leads
@@ -634,11 +596,11 @@ $page_title = 'Manager Control Center';
         </div>
 
 
-        <!-- Follow-ups -->
+        <!-- FOLLOW-UPS -->
 
         <div class="col-md-6 col-lg-3">
 
-            <div class="hm-card p-4 h-100">
+            <div class="control-center-card p-4 h-100">
 
                 <div class="metric-label">
                     Follow-ups Due
@@ -657,11 +619,11 @@ $page_title = 'Manager Control Center';
         </div>
 
 
-        <!-- Appointments -->
+        <!-- APPOINTMENTS -->
 
         <div class="col-md-6 col-lg-3">
 
-            <div class="hm-card p-4 h-100">
+            <div class="control-center-card p-4 h-100">
 
                 <div class="metric-label">
                     Appointments Today
@@ -680,11 +642,11 @@ $page_title = 'Manager Control Center';
         </div>
 
 
-        <!-- Active Events -->
+        <!-- ACTIVE EVENTS -->
 
         <div class="col-md-6 col-lg-3">
 
-            <div class="hm-card p-4 h-100">
+            <div class="control-center-card p-4 h-100">
 
                 <div class="metric-label">
                     Active Events
@@ -705,18 +667,18 @@ $page_title = 'Manager Control Center';
     </div>
 
 
-    <!-- ========================================================= -->
-    <!-- SECONDARY METRICS -->
-    <!-- ========================================================= -->
+    <!-- =========================================================
+         SECONDARY METRICS
+    ========================================================== -->
 
     <div class="row g-3 mb-4">
 
 
-        <!-- New Leads -->
+        <!-- NEW LEADS -->
 
         <div class="col-md-6 col-lg-3">
 
-            <div class="hm-card p-4 h-100">
+            <div class="control-center-card p-4 h-100">
 
                 <div class="metric-label">
                     New Leads
@@ -735,11 +697,11 @@ $page_title = 'Manager Control Center';
         </div>
 
 
-        <!-- Converted Leads -->
+        <!-- CONVERTED -->
 
         <div class="col-md-6 col-lg-3">
 
-            <div class="hm-card p-4 h-100">
+            <div class="control-center-card p-4 h-100">
 
                 <div class="metric-label">
                     Converted This Month
@@ -758,11 +720,11 @@ $page_title = 'Manager Control Center';
         </div>
 
 
-        <!-- Overdue -->
+        <!-- OVERDUE -->
 
         <div class="col-md-6 col-lg-3">
 
-            <div class="hm-card p-4 h-100">
+            <div class="control-center-card p-4 h-100">
 
                 <div class="metric-label">
                     Overdue Follow-ups
@@ -781,11 +743,11 @@ $page_title = 'Manager Control Center';
         </div>
 
 
-        <!-- Activities -->
+        <!-- ACTIVITIES -->
 
         <div class="col-md-6 col-lg-3">
 
-            <div class="hm-card p-4 h-100">
+            <div class="control-center-card p-4 h-100">
 
                 <div class="metric-label">
                     Today's Activities
@@ -806,22 +768,27 @@ $page_title = 'Manager Control Center';
     </div>
 
 
-    <!-- ========================================================= -->
-    <!-- QUICK ACTIONS -->
-    <!-- ========================================================= -->
+    <!-- =========================================================
+         QUICK ACTIONS
+    ========================================================== -->
 
-    <div class="hm-card p-4 mb-4">
+    <div class="control-center-card p-4 mb-4">
 
         <h4 class="section-title mb-3">
             Quick Access
         </h4>
-        
+
 
         <div class="d-flex flex-wrap gap-2">
 
-            <a href="<?php echo BASE_URL; ?>/manager/leads/index.php" class="btn btn-outline-primary">
-    Leads
-</a>
+
+            <a
+                href="<?php echo BASE_URL; ?>/manager/leads/index.php"
+                class="btn btn-outline-primary"
+            >
+                Leads
+            </a>
+
 
             <a
                 href="<?php echo BASE_URL; ?>/events/index.php"
@@ -830,6 +797,7 @@ $page_title = 'Manager Control Center';
                 Events
             </a>
 
+
             <a
                 href="<?php echo BASE_URL; ?>/manager/events/performance.php"
                 class="btn btn-outline-primary"
@@ -837,30 +805,33 @@ $page_title = 'Manager Control Center';
                 Event Performance
             </a>
 
+
             <a
                 href="<?php echo BASE_URL; ?>/telecaller/appointments/index.php"
                 class="btn btn-outline-primary"
             >
                 Appointments
             </a>
-            
+
+
             <a
-    href="<?php echo BASE_URL; ?>/marketing/marketing-plans/index.php"
-    class="btn btn-outline-primary"
->
-    Marketing Plans
-</a>
+                href="<?php echo BASE_URL; ?>/marketing/marketing-plans/index.php"
+                class="btn btn-outline-primary"
+            >
+                Marketing Plans
+            </a>
 
         </div>
 
     </div>
 
 
-    <!-- ========================================================= -->
-    <!-- TODAY'S LEADS -->
-    <!-- ========================================================= -->
+    <!-- =========================================================
+         TODAY'S LEADS
+    ========================================================== -->
 
-    <div class="hm-card p-4 mb-4">
+    <div class="control-center-card p-4 mb-4">
+
 
         <div class="d-flex justify-content-between align-items-center mb-3">
 
@@ -875,6 +846,7 @@ $page_title = 'Manager Control Center';
                 </div>
 
             </div>
+
 
             <a
                 href="<?php echo BASE_URL; ?>/manager/leads/index.php"
@@ -902,108 +874,142 @@ $page_title = 'Manager Control Center';
 
                         <tr>
 
-                            <th>Lead</th>
-                            <th>Phone</th>
-                            <th>Service</th>
-                            <th>Status</th>
-                            <th>Priority</th>
-                            <th>Assigned To</th>
-                            <th>Action</th>
+                            <th>
+                                Lead
+                            </th>
+
+                            <th>
+                                Phone
+                            </th>
+
+                            <th>
+                                Service
+                            </th>
+
+                            <th>
+                                Status
+                            </th>
+
+                            <th>
+                                Priority
+                            </th>
+
+                            <th>
+                                Assigned To
+                            </th>
+
+                            <th>
+                                Action
+                            </th>
 
                         </tr>
 
                     </thead>
 
+
                     <tbody>
 
-                    <?php foreach ($todays_leads_list as $lead): ?>
+                        <?php foreach ($todays_leads_list as $lead): ?>
 
-                        <tr>
+                            <tr>
 
-                            <td>
-                                <strong>
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $lead['name']
-                                    );
-                                    ?>
-                                </strong>
-                            </td>
 
-                            <td>
-                                <?php
-                                echo htmlspecialchars(
-                                    $lead['phone']
-                                );
-                                ?>
-                            </td>
+                                <td>
 
-                            <td>
-                                <?php
-                                echo htmlspecialchars(
-                                    $lead['service_interest']
-                                    ?: '-'
-                                );
-                                ?>
-                            </td>
+                                    <strong>
 
-                            <td>
+                                        <?php
+                                        echo htmlspecialchars(
+                                            $lead['name']
+                                        );
+                                        ?>
 
-                                <span
-                                    class="badge <?php echo status_class($lead['status']); ?>"
-                                >
+                                    </strong>
+
+                                </td>
+
+
+                                <td>
 
                                     <?php
                                     echo htmlspecialchars(
-                                        $lead['status']
+                                        $lead['phone']
                                     );
                                     ?>
 
-                                </span>
+                                </td>
 
-                            </td>
 
-                            <td>
-
-                                <span
-                                    class="badge <?php echo priority_class($lead['priority']); ?>"
-                                >
+                                <td>
 
                                     <?php
                                     echo htmlspecialchars(
-                                        $lead['priority']
+                                        $lead['service_interest'] ?: '-'
                                     );
                                     ?>
 
-                                </span>
+                                </td>
 
-                            </td>
 
-                            <td>
+                                <td>
 
-                                <?php
-                                echo htmlspecialchars(
-                                    $lead['assigned_staff']
-                                    ?? 'Unassigned'
-                                );
-                                ?>
+                                    <span
+                                        class="badge <?php echo status_class($lead['status']); ?>"
+                                    >
 
-                            </td>
+                                        <?php
+                                        echo htmlspecialchars(
+                                            $lead['status']
+                                        );
+                                        ?>
 
-                            <td>
+                                    </span>
 
-                                <a
-                                    href="<?php echo BASE_URL; ?>/leads/view.php?id=<?php echo (int) $lead['id']; ?>"
-                                    class="btn btn-sm btn-outline-primary"
-                                >
-                                    View
-                                </a>
+                                </td>
 
-                            </td>
 
-                        </tr>
+                                <td>
 
-                    <?php endforeach; ?>
+                                    <span
+                                        class="badge <?php echo priority_class($lead['priority']); ?>"
+                                    >
+
+                                        <?php
+                                        echo htmlspecialchars(
+                                            $lead['priority']
+                                        );
+                                        ?>
+
+                                    </span>
+
+                                </td>
+
+
+                                <td>
+
+                                    <?php
+                                    echo htmlspecialchars(
+                                        $lead['assigned_staff'] ?? 'Unassigned'
+                                    );
+                                    ?>
+
+                                </td>
+
+
+                                <td>
+
+                                    <a
+                                        href="<?php echo BASE_URL; ?>/leads/view.php?id=<?php echo (int) $lead['id']; ?>"
+                                        class="btn btn-sm btn-outline-primary"
+                                    >
+                                        View
+                                    </a>
+
+                                </td>
+
+                            </tr>
+
+                        <?php endforeach; ?>
 
                     </tbody>
 
@@ -1016,18 +1022,19 @@ $page_title = 'Manager Control Center';
     </div>
 
 
-    <!-- ========================================================= -->
-    <!-- FOLLOW-UPS + APPOINTMENTS -->
-    <!-- ========================================================= -->
+    <!-- =========================================================
+         FOLLOW-UPS + APPOINTMENTS
+    ========================================================== -->
 
     <div class="row g-4 mb-4">
 
 
-        <!-- Follow-ups -->
+        <!-- FOLLOW-UPS -->
 
         <div class="col-lg-6">
 
-            <div class="hm-card p-4 h-100">
+            <div class="control-center-card p-4 h-100">
+
 
                 <div class="d-flex justify-content-between align-items-center mb-3">
 
@@ -1062,91 +1069,109 @@ $page_title = 'Manager Control Center';
 
                                 <tr>
 
-                                    <th>Lead</th>
-                                    <th>Next Action</th>
-                                    <th>Due</th>
-                                    <th>Staff</th>
+                                    <th>
+                                        Lead
+                                    </th>
+
+                                    <th>
+                                        Next Action
+                                    </th>
+
+                                    <th>
+                                        Due
+                                    </th>
+
+                                    <th>
+                                        Staff
+                                    </th>
 
                                 </tr>
 
                             </thead>
 
+
                             <tbody>
 
-                            <?php foreach ($followups_list as $followup): ?>
+                                <?php foreach ($followups_list as $followup): ?>
 
-                                <?php
+                                    <?php
 
-                                $is_overdue =
-                                    strtotime(
-                                        $followup['next_action_at']
-                                    ) < time();
+                                    $is_overdue =
+                                        strtotime(
+                                            $followup['next_action_at']
+                                        ) < time();
 
-                                ?>
+                                    ?>
 
-                                <tr>
 
-                                    <td>
+                                    <tr>
 
-                                        <a
-                                            href="<?php echo BASE_URL; ?>/leads/view.php?id=<?php echo (int) $followup['id']; ?>"
-                                            class="text-decoration-none fw-semibold"
-                                        >
+
+                                        <td>
+
+                                            <a
+                                                href="<?php echo BASE_URL; ?>/leads/view.php?id=<?php echo (int) $followup['id']; ?>"
+                                                class="text-decoration-none fw-semibold"
+                                            >
+
+                                                <?php
+                                                echo htmlspecialchars(
+                                                    $followup['name']
+                                                );
+                                                ?>
+
+                                            </a>
+
+                                        </td>
+
+
+                                        <td>
 
                                             <?php
                                             echo htmlspecialchars(
-                                                $followup['name']
+                                                $followup['next_action_type']
+                                                    ?: '-'
                                             );
                                             ?>
 
-                                        </a>
+                                        </td>
 
-                                    </td>
 
-                                    <td>
+                                        <td>
 
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $followup['next_action_type']
-                                            ?: '-'
-                                        );
-                                        ?>
+                                            <span
+                                                class="<?php echo $is_overdue ? 'text-danger fw-semibold' : ''; ?>"
+                                            >
 
-                                    </td>
+                                                <?php
+                                                echo date(
+                                                    'd M Y, h:i A',
+                                                    strtotime(
+                                                        $followup['next_action_at']
+                                                    )
+                                                );
+                                                ?>
 
-                                    <td>
+                                            </span>
 
-                                        <span
-                                            class="<?php echo $is_overdue ? 'text-danger fw-semibold' : ''; ?>"
-                                        >
+                                        </td>
+
+
+                                        <td>
 
                                             <?php
-                                            echo date(
-                                                'd M Y, h:i A',
-                                                strtotime(
-                                                    $followup['next_action_at']
-                                                )
+                                            echo htmlspecialchars(
+                                                $followup['assigned_staff']
+                                                    ?? 'Unassigned'
                                             );
                                             ?>
 
-                                        </span>
+                                        </td>
 
-                                    </td>
 
-                                    <td>
+                                    </tr>
 
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $followup['assigned_staff']
-                                            ?? 'Unassigned'
-                                        );
-                                        ?>
-
-                                    </td>
-
-                                </tr>
-
-                            <?php endforeach; ?>
+                                <?php endforeach; ?>
 
                             </tbody>
 
@@ -1161,11 +1186,12 @@ $page_title = 'Manager Control Center';
         </div>
 
 
-        <!-- Appointments -->
+        <!-- APPOINTMENTS -->
 
         <div class="col-lg-6">
 
-            <div class="hm-card p-4 h-100">
+            <div class="control-center-card p-4 h-100">
+
 
                 <div class="d-flex justify-content-between align-items-center mb-3">
 
@@ -1200,88 +1226,105 @@ $page_title = 'Manager Control Center';
 
                                 <tr>
 
-                                    <th>Lead</th>
-                                    <th>Time</th>
-                                    <th>Type</th>
-                                    <th>Status</th>
+                                    <th>
+                                        Lead
+                                    </th>
+
+                                    <th>
+                                        Time
+                                    </th>
+
+                                    <th>
+                                        Type
+                                    </th>
+
+                                    <th>
+                                        Status
+                                    </th>
 
                                 </tr>
 
                             </thead>
 
+
                             <tbody>
 
-                            <?php foreach ($todays_appointments as $appointment): ?>
+                                <?php foreach ($todays_appointments as $appointment): ?>
 
-                                <tr>
+                                    <tr>
 
-                                    <td>
 
-                                        <div class="fw-semibold">
+                                        <td>
+
+                                            <div class="fw-semibold">
+
+                                                <?php
+                                                echo htmlspecialchars(
+                                                    $appointment['lead_name']
+                                                );
+                                                ?>
+
+                                            </div>
+
+                                            <div class="small hm-muted">
+
+                                                <?php
+                                                echo htmlspecialchars(
+                                                    $appointment['lead_phone']
+                                                );
+                                                ?>
+
+                                            </div>
+
+                                        </td>
+
+
+                                        <td>
 
                                             <?php
-                                            echo htmlspecialchars(
-                                                $appointment['lead_name']
+                                            echo date(
+                                                'h:i A',
+                                                strtotime(
+                                                    $appointment['appointment_date']
+                                                )
                                             );
                                             ?>
 
-                                        </div>
+                                        </td>
 
-                                        <div class="small hm-muted">
 
-                                            <?php
-                                            echo htmlspecialchars(
-                                                $appointment['lead_phone']
-                                            );
-                                            ?>
-
-                                        </div>
-
-                                    </td>
-
-                                    <td>
-
-                                        <?php
-                                        echo date(
-                                            'h:i A',
-                                            strtotime(
-                                                $appointment['appointment_date']
-                                            )
-                                        );
-                                        ?>
-
-                                    </td>
-
-                                    <td>
-
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $appointment['appointment_type']
-                                            ?: '-'
-                                        );
-                                        ?>
-
-                                    </td>
-
-                                    <td>
-
-                                        <span
-                                            class="badge <?php echo status_class($appointment['status']); ?>"
-                                        >
+                                        <td>
 
                                             <?php
                                             echo htmlspecialchars(
-                                                $appointment['status']
+                                                $appointment['appointment_type']
+                                                    ?: '-'
                                             );
                                             ?>
 
-                                        </span>
+                                        </td>
 
-                                    </td>
 
-                                </tr>
+                                        <td>
 
-                            <?php endforeach; ?>
+                                            <span
+                                                class="badge <?php echo status_class($appointment['status']); ?>"
+                                            >
+
+                                                <?php
+                                                echo htmlspecialchars(
+                                                    $appointment['status']
+                                                );
+                                                ?>
+
+                                            </span>
+
+                                        </td>
+
+
+                                    </tr>
+
+                                <?php endforeach; ?>
 
                             </tbody>
 
@@ -1298,11 +1341,12 @@ $page_title = 'Manager Control Center';
     </div>
 
 
-    <!-- ========================================================= -->
-    <!-- ACTIVE EVENTS -->
-    <!-- ========================================================= -->
+    <!-- =========================================================
+         ACTIVE EVENTS
+    ========================================================== -->
 
-    <div class="hm-card p-4 mb-4">
+    <div class="control-center-card p-4 mb-4">
+
 
         <div class="d-flex justify-content-between align-items-center mb-3">
 
@@ -1317,6 +1361,7 @@ $page_title = 'Manager Control Center';
                 </div>
 
             </div>
+
 
             <a
                 href="<?php echo BASE_URL; ?>/events/index.php"
@@ -1344,101 +1389,124 @@ $page_title = 'Manager Control Center';
 
                         <tr>
 
-                            <th>Event</th>
-                            <th>Type</th>
-                            <th>Date</th>
-                            <th>Location</th>
-                            <th>Status</th>
-                            <th>Action</th>
+                            <th>
+                                Event
+                            </th>
+
+                            <th>
+                                Type
+                            </th>
+
+                            <th>
+                                Date
+                            </th>
+
+                            <th>
+                                Location
+                            </th>
+
+                            <th>
+                                Status
+                            </th>
+
+                            <th>
+                                Action
+                            </th>
 
                         </tr>
 
                     </thead>
 
+
                     <tbody>
 
-                    <?php foreach ($active_events_list as $event): ?>
+                        <?php foreach ($active_events_list as $event): ?>
 
-                        <tr>
+                            <tr>
 
-                            <td>
 
-                                <strong>
+                                <td>
 
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $event['event_name']
-                                    );
-                                    ?>
+                                    <strong>
 
-                                </strong>
+                                        <?php
+                                        echo htmlspecialchars(
+                                            $event['event_name']
+                                        );
+                                        ?>
 
-                            </td>
+                                    </strong>
 
-                            <td>
+                                </td>
 
-                                <?php
-                                echo htmlspecialchars(
-                                    $event['event_type']
-                                );
-                                ?>
 
-                            </td>
-
-                            <td>
-
-                                <?php
-                                echo date(
-                                    'd M Y',
-                                    strtotime(
-                                        $event['event_date']
-                                    )
-                                );
-                                ?>
-
-                            </td>
-
-                            <td>
-
-                                <?php
-                                echo htmlspecialchars(
-                                    $event['location']
-                                    ?: '-'
-                                );
-                                ?>
-
-                            </td>
-
-                            <td>
-
-                                <span
-                                    class="badge <?php echo status_class($event['status']); ?>"
-                                >
+                                <td>
 
                                     <?php
                                     echo htmlspecialchars(
-                                        $event['status']
+                                        $event['event_type']
                                     );
                                     ?>
 
-                                </span>
+                                </td>
 
-                            </td>
 
-                            <td>
+                                <td>
 
-                                <a
-                                    href="<?php echo BASE_URL; ?>/events/view.php?id=<?php echo (int) $event['id']; ?>"
-                                    class="btn btn-sm btn-outline-primary"
-                                >
-                                    View
-                                </a>
+                                    <?php
+                                    echo date(
+                                        'd M Y',
+                                        strtotime(
+                                            $event['event_date']
+                                        )
+                                    );
+                                    ?>
 
-                            </td>
+                                </td>
 
-                        </tr>
 
-                    <?php endforeach; ?>
+                                <td>
+
+                                    <?php
+                                    echo htmlspecialchars(
+                                        $event['location'] ?: '-'
+                                    );
+                                    ?>
+
+                                </td>
+
+
+                                <td>
+
+                                    <span
+                                        class="badge <?php echo status_class($event['status']); ?>"
+                                    >
+
+                                        <?php
+                                        echo htmlspecialchars(
+                                            $event['status']
+                                        );
+                                        ?>
+
+                                    </span>
+
+                                </td>
+
+
+                                <td>
+
+                                    <a
+                                        href="<?php echo BASE_URL; ?>/events/view.php?id=<?php echo (int) $event['id']; ?>"
+                                        class="btn btn-sm btn-outline-primary"
+                                    >
+                                        View
+                                    </a>
+
+                                </td>
+
+                            </tr>
+
+                        <?php endforeach; ?>
 
                     </tbody>
 
@@ -1451,11 +1519,12 @@ $page_title = 'Manager Control Center';
     </div>
 
 
-    <!-- ========================================================= -->
-    <!-- RECENT TEAM ACTIVITY -->
-    <!-- ========================================================= -->
+    <!-- =========================================================
+         RECENT TEAM ACTIVITY
+    ========================================================== -->
 
-    <div class="hm-card p-4 mb-4">
+    <div class="control-center-card p-4 mb-4">
+
 
         <div class="d-flex justify-content-between align-items-center mb-3">
 
@@ -1486,16 +1555,19 @@ $page_title = 'Manager Control Center';
 
                 <div class="activity-item">
 
+
                     <div class="d-flex justify-content-between flex-wrap">
 
                         <div>
 
                             <strong>
+
                                 <?php
                                 echo htmlspecialchars(
                                     $activity['user_name']
                                 );
                                 ?>
+
                             </strong>
 
                             recorded
@@ -1527,6 +1599,7 @@ $page_title = 'Manager Control Center';
 
                         </div>
 
+
                         <div class="small hm-muted">
 
                             <?php
@@ -1542,6 +1615,7 @@ $page_title = 'Manager Control Center';
 
                     </div>
 
+
                     <?php if (!empty($activity['description'])): ?>
 
                         <div class="small hm-muted mt-1">
@@ -1556,6 +1630,7 @@ $page_title = 'Manager Control Center';
 
                     <?php endif; ?>
 
+
                 </div>
 
             <?php endforeach; ?>
@@ -1568,10 +1643,16 @@ $page_title = 'Manager Control Center';
 </div>
 
 
-<script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
-></script>
+<?php
 
-</body>
+/*
+-
+| SHARED FOOTER
+-
+| This also keeps the common page structure consistent.
+-
+*/
 
-</html>
+require_once __DIR__ . '/../includes/footer.php';
+
+?>

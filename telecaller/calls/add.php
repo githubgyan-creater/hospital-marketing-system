@@ -1,9 +1,13 @@
  <?php
 
+require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/role_check.php';
+require_once __DIR__ . '/../../includes/permission_check.php';
 
 require_role('telecaller');
+require_permission('calls.create');
 
 $user = current_user();
 
@@ -12,13 +16,16 @@ $lead_id = isset($_GET['lead_id'])
     : 0;
 
 if ($lead_id <= 0) {
+
+    http_response_code(400);
+
     exit('Invalid lead.');
 }
 
 
 /*
 |--------------------------------------------------------------------------
-| Get Lead
+| GET LEAD
 |--------------------------------------------------------------------------
 */
 
@@ -39,21 +46,37 @@ $stmt->execute([
     $user['id']
 ]);
 
-$lead = $stmt->fetch();
+$lead = $stmt->fetch(
+    PDO::FETCH_ASSOC
+);
 
 if (!$lead) {
+
     http_response_code(404);
+
     exit('Lead not found or not assigned to you.');
 }
 
 
 /*
 |--------------------------------------------------------------------------
-| Form Processing
+| FORM VARIABLES
 |--------------------------------------------------------------------------
 */
 
 $error = '';
+
+$call_outcome = '';
+$call_notes = '';
+$next_action_type = '';
+$next_action_at = '';
+
+
+/*
+|--------------------------------------------------------------------------
+| FORM PROCESSING
+|--------------------------------------------------------------------------
+*/
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -76,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     /*
     |--------------------------------------------------------------------------
-    | Allowed Call Outcomes
+    | ALLOWED CALL OUTCOMES
     |--------------------------------------------------------------------------
     */
 
@@ -92,272 +115,339 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     /*
     |--------------------------------------------------------------------------
-    | Validate Call Outcome
+    | VALIDATE CALL OUTCOME
     |--------------------------------------------------------------------------
     */
 
-    if (!in_array($call_outcome, $allowed_outcomes, true)) {
+    if (
+        !in_array(
+            $call_outcome,
+            $allowed_outcomes,
+            true
+        )
+    ) {
 
-        $error = 'Please select a valid call outcome.';
+        $error =
+            'Please select a valid call outcome.';
 
     } elseif ($call_notes === '') {
 
-        $error = 'Please enter call notes.';
+        $error =
+            'Please enter call notes.';
+    }
 
-    } else {
 
+    /*
+    |--------------------------------------------------------------------------
+    | CONVERT NEXT ACTION DATETIME
+    |--------------------------------------------------------------------------
+    */
 
-        /*
-        |--------------------------------------------------------------------------
-        | Convert DateTime
-        |--------------------------------------------------------------------------
-        */
+    $next_action_datetime = null;
 
-        $next_action_datetime = null;
+    if (
+        $error === '' &&
+        $next_action_at !== ''
+    ) {
 
-        if ($next_action_at !== '') {
+        $timestamp = strtotime(
+            str_replace(
+                'T',
+                ' ',
+                $next_action_at
+            )
+        );
 
-            $timestamp = strtotime($next_action_at);
+        if ($timestamp === false) {
 
-            if ($timestamp === false) {
+            $error =
+                'Invalid next action date/time.';
 
-                $error = 'Invalid next action date/time.';
+        } else {
 
-            } else {
-
-                $next_action_datetime = date(
-                    'Y-m-d H:i:s',
-                    $timestamp
-                );
-            }
+            $next_action_datetime = date(
+                'Y-m-d H:i:s',
+                $timestamp
+            );
         }
+    }
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | Validate Next Action
-        |--------------------------------------------------------------------------
-        */
+    /*
+    |--------------------------------------------------------------------------
+    | VALIDATE NEXT ACTION
+    |--------------------------------------------------------------------------
+    */
 
-        if (
-            $error === '' &&
-            $next_action_type !== '' &&
-            $next_action_datetime === null
-        ) {
+    if (
+        $error === '' &&
+        $next_action_type !== '' &&
+        $next_action_datetime === null
+    ) {
 
-            $error = 'Please select a date and time for the next action.';
-        }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Automatic Lead Status
-        |--------------------------------------------------------------------------
-        */
-
-        $new_status = '';
-
-        switch ($call_outcome) {
-
-            case 'Connected':
-                $new_status = 'Contacted';
-                break;
-
-            case 'Not Connected':
-                $new_status = 'Follow-up Required';
-                break;
-
-            case 'Call Back':
-                $new_status = 'Follow-up Required';
-                break;
-
-            case 'Interested':
-                $new_status = 'Interested';
-                break;
-
-            case 'Not Interested':
-                $new_status = 'Not Interested';
-                break;
-
-            case 'Appointment Requested':
-                $new_status = 'Appointment Requested';
-                break;
-        }
+        $error =
+            'Please select a date and time for the next action.';
+    }
 
 
-        /*
-        |--------------------------------------------------------------------------
-        | Save Everything
-        |--------------------------------------------------------------------------
-        */
+    /*
+    |--------------------------------------------------------------------------
+    | AUTOMATIC LEAD STATUS
+    |--------------------------------------------------------------------------
+    */
 
-        if ($error === '') {
+    $new_status = '';
 
-            try {
+    switch ($call_outcome) {
 
-                $pdo->beginTransaction();
+        case 'Connected':
+
+            $new_status = 'Contacted';
+
+            break;
+
+        case 'Not Connected':
+
+            $new_status = 'Follow-up Required';
+
+            break;
+
+        case 'Call Back':
+
+            $new_status = 'Follow-up Required';
+
+            break;
+
+        case 'Interested':
+
+            $new_status = 'Interested';
+
+            break;
+
+        case 'Not Interested':
+
+            $new_status = 'Not Interested';
+
+            break;
+
+        case 'Appointment Requested':
+
+            $new_status = 'Appointment Requested';
+
+            break;
+    }
 
 
-                /*
-                |--------------------------------------------------------------------------
-                | Insert Call
-                |--------------------------------------------------------------------------
-                */
+    /*
+    |--------------------------------------------------------------------------
+    | SAVE EVERYTHING
+    |--------------------------------------------------------------------------
+    */
+
+    if ($error === '') {
+
+        try {
+
+            $pdo->beginTransaction();
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | INSERT CALL
+            |--------------------------------------------------------------------------
+            */
+
+            $stmt = $pdo->prepare("
+                INSERT INTO lead_calls
+                (
+                    lead_id,
+                    user_id,
+                    call_outcome,
+                    call_notes,
+                    next_action_type,
+                    next_action_at,
+                    call_at
+                )
+                VALUES
+                (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    NOW()
+                )
+            ");
+
+            $stmt->execute([
+                $lead_id,
+                $user['id'],
+                $call_outcome,
+                $call_notes,
+                $next_action_type !== ''
+                    ? $next_action_type
+                    : null,
+                $next_action_datetime
+            ]);
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | UPDATE LEAD STATUS + NEXT ACTION
+            |--------------------------------------------------------------------------
+            */
+
+            $stmt = $pdo->prepare("
+                UPDATE leads
+                SET
+                    status = ?,
+                    next_action_type = ?,
+                    next_action_at = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                  AND assigned_to = ?
+            ");
+
+            $stmt->execute([
+                $new_status,
+                $next_action_type !== ''
+                    ? $next_action_type
+                    : null,
+                $next_action_datetime,
+                $lead_id,
+                $user['id']
+            ]);
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | ADD CALL ACTIVITY
+            |--------------------------------------------------------------------------
+            */
+
+            $activity_description =
+                'Call outcome: '
+                . $call_outcome
+                . '. '
+                . $call_notes;
+
+            $stmt = $pdo->prepare("
+                INSERT INTO lead_activities
+                (
+                    lead_id,
+                    user_id,
+                    activity_type,
+                    description,
+                    activity_at
+                )
+                VALUES
+                (
+                    ?,
+                    ?,
+                    'Call',
+                    ?,
+                    NOW()
+                )
+            ");
+
+            $stmt->execute([
+                $lead_id,
+                $user['id'],
+                $activity_description
+            ]);
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | ADD STATUS CHANGE ACTIVITY
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+                $lead['status'] !== $new_status
+            ) {
+
+                $status_description =
+                    'Lead status changed from "'
+                    . $lead['status']
+                    . '" to "'
+                    . $new_status
+                    . '" after call outcome "'
+                    . $call_outcome
+                    . '".';
+
 
                 $stmt = $pdo->prepare("
-                    INSERT INTO lead_calls (
-                        lead_id,
-                        user_id,
-                        call_outcome,
-                        call_notes,
-                        next_action_type,
-                        next_action_at,
-                        call_at
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, NOW())
-                ");
-
-                $stmt->execute([
-                    $lead_id,
-                    $user['id'],
-                    $call_outcome,
-                    $call_notes,
-                    $next_action_type !== ''
-                        ? $next_action_type
-                        : null,
-                    $next_action_datetime
-                ]);
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | Update Lead Status + Next Action
-                |--------------------------------------------------------------------------
-                */
-
-                $stmt = $pdo->prepare("
-                    UPDATE leads
-                    SET
-                        status = ?,
-                        next_action_type = ?,
-                        next_action_at = ?
-                    WHERE id = ?
-                ");
-
-                $stmt->execute([
-                    $new_status,
-                    $next_action_type !== ''
-                        ? $next_action_type
-                        : null,
-                    $next_action_datetime,
-                    $lead_id
-                ]);
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | Add Call Activity
-                |--------------------------------------------------------------------------
-                */
-
-                $activity_description =
-                    'Call outcome: ' .
-                    $call_outcome .
-                    '. ' .
-                    $call_notes;
-
-
-                $stmt = $pdo->prepare("
-                    INSERT INTO lead_activities (
+                    INSERT INTO lead_activities
+                    (
                         lead_id,
                         user_id,
                         activity_type,
                         description,
                         activity_at
                     )
-                    VALUES (?, ?, 'Call', ?, NOW())
+                    VALUES
+                    (
+                        ?,
+                        ?,
+                        'Status Changed',
+                        ?,
+                        NOW()
+                    )
                 ");
 
                 $stmt->execute([
                     $lead_id,
                     $user['id'],
-                    $activity_description
+                    $status_description
                 ]);
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | Add Status Change Activity
-                |--------------------------------------------------------------------------
-                */
-
-                if ($lead['status'] !== $new_status) {
-
-                    $status_description =
-                        'Lead status changed from "' .
-                        $lead['status'] .
-                        '" to "' .
-                        $new_status .
-                        '" after call outcome "' .
-                        $call_outcome .
-                        '".';
-
-                    $stmt = $pdo->prepare("
-                        INSERT INTO lead_activities (
-                            lead_id,
-                            user_id,
-                            activity_type,
-                            description,
-                            activity_at
-                        )
-                        VALUES (?, ?, 'Status Changed', ?, NOW())
-                    ");
-
-                    $stmt->execute([
-                        $lead_id,
-                        $user['id'],
-                        $status_description
-                    ]);
-                }
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | Commit Transaction
-                |--------------------------------------------------------------------------
-                */
-
-                $pdo->commit();
-
-
-                /*
-                |--------------------------------------------------------------------------
-                | Redirect
-                |--------------------------------------------------------------------------
-                */
-
-                header(
-                    'Location: ' .
-                    BASE_URL .
-                    '/leads/view.php?id=' .
-                    $lead_id
-                );
-
-                exit;
-
-            } catch (PDOException $e) {
-
-                if ($pdo->inTransaction()) {
-                    $pdo->rollBack();
-                }
-
-                $error =
-                    'Unable to save call. Please try again.';
             }
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | COMMIT TRANSACTION
+            |--------------------------------------------------------------------------
+            */
+
+            $pdo->commit();
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | REDIRECT
+            |--------------------------------------------------------------------------
+            */
+
+            header(
+                'Location: '
+                . BASE_URL
+                . '/leads/view.php?id='
+                . $lead_id
+            );
+
+            exit;
+
+        } catch (Throwable $e) {
+
+            if ($pdo->inTransaction()) {
+
+                $pdo->rollBack();
+            }
+
+            $error =
+                'Unable to save call. Please try again.';
         }
     }
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| PAGE HEADER
+|--------------------------------------------------------------------------
+*/
 
 $page_title = 'Record Call';
 
@@ -369,7 +459,7 @@ require_once __DIR__ . '/../../includes/header.php';
 <div class="container py-4">
 
 
-    <!-- Page Header -->
+    <!-- PAGE HEADER -->
 
     <div class="d-flex justify-content-between align-items-center mb-4">
 
@@ -396,8 +486,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 
 
-
-    <!-- Lead Information -->
+    <!-- LEAD INFORMATION -->
 
     <div class="hm-card p-4 mb-4">
 
@@ -426,7 +515,6 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
 
 
-
             <div class="col-md-6">
 
                 <strong>Phone</strong>
@@ -444,7 +532,6 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
 
 
-
             <div class="col-md-6">
 
                 <strong>Service Interest</strong>
@@ -453,14 +540,14 @@ require_once __DIR__ . '/../../includes/header.php';
 
                     <?php
                     echo htmlspecialchars(
-                        $lead['service_interest'] ?: '-'
+                        $lead['service_interest']
+                        ?: '-'
                     );
                     ?>
 
                 </div>
 
             </div>
-
 
 
             <div class="col-md-6">
@@ -471,14 +558,14 @@ require_once __DIR__ . '/../../includes/header.php';
 
                     <?php
                     echo htmlspecialchars(
-                        $lead['source_name'] ?: '-'
+                        $lead['source_name']
+                        ?: '-'
                     );
                     ?>
 
                 </div>
 
             </div>
-
 
 
             <div class="col-md-6">
@@ -506,8 +593,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 
 
-
-    <!-- Error -->
+    <!-- ERROR -->
 
     <?php if ($error !== ''): ?>
 
@@ -522,8 +608,7 @@ require_once __DIR__ . '/../../includes/header.php';
     <?php endif; ?>
 
 
-
-    <!-- Call Form -->
+    <!-- CALL FORM -->
 
     <div class="hm-card p-4">
 
@@ -538,7 +623,7 @@ require_once __DIR__ . '/../../includes/header.php';
             <div class="row g-3">
 
 
-                <!-- Call Outcome -->
+                <!-- CALL OUTCOME -->
 
                 <div class="col-md-6">
 
@@ -567,27 +652,69 @@ require_once __DIR__ . '/../../includes/header.php';
                             Select Outcome
                         </option>
 
-                        <option value="Connected">
+                        <option
+                            value="Connected"
+                            <?php
+                            echo $call_outcome === 'Connected'
+                                ? 'selected'
+                                : '';
+                            ?>
+                        >
                             Connected
                         </option>
 
-                        <option value="Not Connected">
+                        <option
+                            value="Not Connected"
+                            <?php
+                            echo $call_outcome === 'Not Connected'
+                                ? 'selected'
+                                : '';
+                            ?>
+                        >
                             Not Connected
                         </option>
 
-                        <option value="Call Back">
+                        <option
+                            value="Call Back"
+                            <?php
+                            echo $call_outcome === 'Call Back'
+                                ? 'selected'
+                                : '';
+                            ?>
+                        >
                             Call Back
                         </option>
 
-                        <option value="Interested">
+                        <option
+                            value="Interested"
+                            <?php
+                            echo $call_outcome === 'Interested'
+                                ? 'selected'
+                                : '';
+                            ?>
+                        >
                             Interested
                         </option>
 
-                        <option value="Not Interested">
+                        <option
+                            value="Not Interested"
+                            <?php
+                            echo $call_outcome === 'Not Interested'
+                                ? 'selected'
+                                : '';
+                            ?>
+                        >
                             Not Interested
                         </option>
 
-                        <option value="Appointment Requested">
+                        <option
+                            value="Appointment Requested"
+                            <?php
+                            echo $call_outcome === 'Appointment Requested'
+                                ? 'selected'
+                                : '';
+                            ?>
+                        >
                             Appointment Requested
                         </option>
 
@@ -596,8 +723,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 </div>
 
 
-
-                <!-- Next Action -->
+                <!-- NEXT ACTION -->
 
                 <div class="col-md-6">
 
@@ -605,9 +731,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         for="next_action_type"
                         class="form-label"
                     >
-
                         Next Action
-
                     </label>
 
 
@@ -621,23 +745,58 @@ require_once __DIR__ . '/../../includes/header.php';
                             No Next Action
                         </option>
 
-                        <option value="Call">
+                        <option
+                            value="Call"
+                            <?php
+                            echo $next_action_type === 'Call'
+                                ? 'selected'
+                                : '';
+                            ?>
+                        >
                             Call
                         </option>
 
-                        <option value="Follow-up">
+                        <option
+                            value="Follow-up"
+                            <?php
+                            echo $next_action_type === 'Follow-up'
+                                ? 'selected'
+                                : '';
+                            ?>
+                        >
                             Follow-up
                         </option>
 
-                        <option value="WhatsApp">
+                        <option
+                            value="WhatsApp"
+                            <?php
+                            echo $next_action_type === 'WhatsApp'
+                                ? 'selected'
+                                : '';
+                            ?>
+                        >
                             WhatsApp
                         </option>
 
-                        <option value="Appointment">
+                        <option
+                            value="Appointment"
+                            <?php
+                            echo $next_action_type === 'Appointment'
+                                ? 'selected'
+                                : '';
+                            ?>
+                        >
                             Appointment
                         </option>
 
-                        <option value="Visit">
+                        <option
+                            value="Visit"
+                            <?php
+                            echo $next_action_type === 'Visit'
+                                ? 'selected'
+                                : '';
+                            ?>
+                        >
                             Visit
                         </option>
 
@@ -646,8 +805,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 </div>
 
 
-
-                <!-- Notes -->
+                <!-- NOTES -->
 
                 <div class="col-12">
 
@@ -672,13 +830,16 @@ require_once __DIR__ . '/../../includes/header.php';
                         class="form-control"
                         placeholder="Enter important details from the call..."
                         required
-                    ></textarea>
+                    ><?php
+                    echo htmlspecialchars(
+                        $call_notes
+                    );
+                    ?></textarea>
 
                 </div>
 
 
-
-                <!-- Next Action Date -->
+                <!-- NEXT ACTION DATE -->
 
                 <div class="col-md-6">
 
@@ -686,9 +847,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         for="next_action_at"
                         class="form-label"
                     >
-
                         Next Action Date & Time
-
                     </label>
 
 
@@ -697,13 +856,17 @@ require_once __DIR__ . '/../../includes/header.php';
                         name="next_action_at"
                         id="next_action_at"
                         class="form-control"
+                        value="<?php
+                        echo htmlspecialchars(
+                            $next_action_at
+                        );
+                        ?>"
                     >
 
                 </div>
 
 
-
-                <!-- Submit -->
+                <!-- SUBMIT -->
 
                 <div class="col-12 mt-4">
 

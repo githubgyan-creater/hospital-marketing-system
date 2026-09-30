@@ -1,17 +1,15 @@
-<?php
+ <?php
 
 require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/role_check.php';
+require_once __DIR__ . '/../../includes/permission_check.php';
 require_once __DIR__ . '/../../config/database.php';
 
-require_login();
+require_role('telecaller');
+require_permission('calls.view');
 
 $user = current_user();
-
-if (!$user || $user['role'] !== 'telecaller') {
-    http_response_code(403);
-    exit('Access denied.');
-}
 
 $user_id = (int) $user['id'];
 
@@ -123,7 +121,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $user_id
         ]);
 
-        $lead = $lead_check_stmt->fetch();
+        $lead = $lead_check_stmt->fetch(
+            PDO::FETCH_ASSOC
+        );
 
         if (!$lead) {
 
@@ -148,6 +148,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             /*
             |--------------------------------------------------------------------------
+            | Convert Date/Time Values
+            |--------------------------------------------------------------------------
+            */
+
+            $call_at_mysql = null;
+            $next_action_at_mysql = null;
+
+            $call_timestamp = strtotime(
+                str_replace('T', ' ', $call_at)
+            );
+
+            if ($call_timestamp === false) {
+
+                throw new Exception(
+                    'Invalid call date and time.'
+                );
+            }
+
+            $call_at_mysql = date(
+                'Y-m-d H:i:s',
+                $call_timestamp
+            );
+
+
+            if ($next_action_at !== '') {
+
+                $next_action_timestamp = strtotime(
+                    str_replace('T', ' ', $next_action_at)
+                );
+
+                if ($next_action_timestamp === false) {
+
+                    throw new Exception(
+                        'Invalid next action date and time.'
+                    );
+                }
+
+                $next_action_at_mysql = date(
+                    'Y-m-d H:i:s',
+                    $next_action_timestamp
+                );
+            }
+
+
+            /*
+            |--------------------------------------------------------------------------
             | INSERT CALL
             |--------------------------------------------------------------------------
             */
@@ -158,7 +204,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     lead_id,
                     user_id,
                     call_outcome,
-                    Call_notes,
+                    call_notes,
                     next_action_type,
                     next_action_at,
                     call_at
@@ -176,26 +222,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
 
             $call_stmt->execute([
-
                 $selected_lead_id,
-
                 $user_id,
-
                 $call_outcome,
-
                 $call_notes !== ''
                     ? $call_notes
                     : null,
-
                 $next_action_type !== ''
                     ? $next_action_type
                     : null,
-
-                $next_action_at !== ''
-                    ? $next_action_at
-                    : null,
-
-                $call_at
+                $next_action_at_mysql,
+                $call_at_mysql
             ]);
 
 
@@ -247,19 +284,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
 
             $lead_update_stmt->execute([
-
                 $new_lead_status,
-
                 $next_action_type !== ''
                     ? $next_action_type
                     : null,
-
-                $next_action_at !== ''
-                    ? $next_action_at
-                    : null,
-
+                $next_action_at_mysql,
                 $selected_lead_id,
-
                 $user_id
             ]);
 
@@ -271,21 +301,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             */
 
             $activity_description =
-                'Telecaller call logged. Outcome: ' .
-                $call_outcome;
+                'Telecaller call logged. Outcome: '
+                . $call_outcome;
 
             if ($call_notes !== '') {
 
                 $activity_description .=
-                    '. Notes: ' .
-                    $call_notes;
+                    '. Notes: '
+                    . $call_notes;
             }
 
             if ($next_action_type !== '') {
 
                 $activity_description .=
-                    '. Next Action: ' .
-                    $next_action_type;
+                    '. Next Action: '
+                    . $next_action_type;
             }
 
 
@@ -309,24 +339,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
 
             $activity_stmt->execute([
-
                 $selected_lead_id,
-
                 $user_id,
-
                 'Telecaller Call',
-
                 $activity_description,
-
-                $call_at
+                $call_at_mysql
             ]);
 
 
-            $pdo->commit();
+            /*
+            |--------------------------------------------------------------------------
+            | COMMIT
+            |--------------------------------------------------------------------------
+            */
 
+            $pdo->commit();
 
             $success =
                 'Call recorded successfully.';
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | RESET FORM
+            |--------------------------------------------------------------------------
+            */
 
             $selected_lead_id = '';
             $call_outcome = '';
@@ -338,12 +375,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable $e) {
 
             if ($pdo->inTransaction()) {
+
                 $pdo->rollBack();
             }
 
             $error =
-                'Unable to record call: ' .
-                $e->getMessage();
+                'Unable to record call: '
+                . $e->getMessage();
         }
     }
 }
@@ -371,7 +409,9 @@ $lead_stmt->execute([
     $user_id
 ]);
 
-$assigned_leads = $lead_stmt->fetchAll();
+$assigned_leads = $lead_stmt->fetchAll(
+    PDO::FETCH_ASSOC
+);
 
 
 /*
@@ -382,7 +422,6 @@ $assigned_leads = $lead_stmt->fetchAll();
 
 $summary_stmt = $pdo->prepare("
     SELECT
-
         COUNT(*) AS total_calls,
 
         SUM(
@@ -410,7 +449,6 @@ $summary_stmt = $pdo->prepare("
         ) AS appointment_requests
 
     FROM lead_calls
-
     WHERE user_id = ?
 ");
 
@@ -418,7 +456,9 @@ $summary_stmt->execute([
     $user_id
 ]);
 
-$summary = $summary_stmt->fetch();
+$summary = $summary_stmt->fetch(
+    PDO::FETCH_ASSOC
+);
 
 
 /*
@@ -431,23 +471,17 @@ $history_stmt = $pdo->prepare("
     SELECT
         lc.id,
         lc.call_outcome,
-        lc.Call_notes AS call_notes,
+        lc.call_notes,
         lc.next_action_type,
         lc.next_action_at,
         lc.call_at,
-
         l.name AS lead_name,
         l.phone AS lead_phone
-
     FROM lead_calls lc
-
     INNER JOIN leads l
         ON lc.lead_id = l.id
-
     WHERE lc.user_id = ?
-
     ORDER BY lc.call_at DESC
-
     LIMIT 50
 ");
 
@@ -455,15 +489,24 @@ $history_stmt->execute([
     $user_id
 ]);
 
-$call_history = $history_stmt->fetchAll();
+$call_history = $history_stmt->fetchAll(
+    PDO::FETCH_ASSOC
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| HEADER
+|--------------------------------------------------------------------------
+*/
+
+$page_title = 'My Calls';
+
+require_once __DIR__ . '/../../includes/header.php';
 
 ?>
 
-<?php require_once __DIR__ . '/../../includes/header.php'; ?>
-
-
 <div class="container py-4">
-
 
     <!-- HEADER -->
 
@@ -471,9 +514,9 @@ $call_history = $history_stmt->fetchAll();
 
         <div>
 
-            <h2 class="mb-1">
+            <h1 class="hm-page-title mb-1">
                 My Calls
-            </h2>
+            </h1>
 
             <p class="text-muted mb-0">
                 Record and manage your telecaller calls.
@@ -489,7 +532,11 @@ $call_history = $history_stmt->fetchAll();
     <?php if ($success !== ''): ?>
 
         <div class="alert alert-success">
-            <?php echo htmlspecialchars($success); ?>
+
+            <?php
+            echo htmlspecialchars($success);
+            ?>
+
         </div>
 
     <?php endif; ?>
@@ -500,7 +547,11 @@ $call_history = $history_stmt->fetchAll();
     <?php if ($error !== ''): ?>
 
         <div class="alert alert-danger">
-            <?php echo htmlspecialchars($error); ?>
+
+            <?php
+            echo htmlspecialchars($error);
+            ?>
+
         </div>
 
     <?php endif; ?>
@@ -510,6 +561,8 @@ $call_history = $history_stmt->fetchAll();
 
     <div class="row g-4 mb-4">
 
+
+        <!-- Total Calls -->
 
         <div class="col-md-6 col-lg-3">
 
@@ -539,6 +592,8 @@ $call_history = $history_stmt->fetchAll();
         </div>
 
 
+        <!-- Today's Calls -->
+
         <div class="col-md-6 col-lg-3">
 
             <div class="card shadow-sm border-0 h-100">
@@ -566,6 +621,8 @@ $call_history = $history_stmt->fetchAll();
 
         </div>
 
+
+        <!-- Connected -->
 
         <div class="col-md-6 col-lg-3">
 
@@ -595,6 +652,8 @@ $call_history = $history_stmt->fetchAll();
         </div>
 
 
+        <!-- Appointment Requests -->
+
         <div class="col-md-6 col-lg-3">
 
             <div class="card shadow-sm border-0 h-100">
@@ -621,7 +680,6 @@ $call_history = $history_stmt->fetchAll();
             </div>
 
         </div>
-
 
     </div>
 
@@ -667,7 +725,6 @@ $call_history = $history_stmt->fetchAll();
                                     Select Lead
                                 </option>
 
-
                                 <?php foreach (
                                     $assigned_leads
                                     as $lead
@@ -704,7 +761,6 @@ $call_history = $history_stmt->fetchAll();
                                     </option>
 
                                 <?php endforeach; ?>
-
 
                             </select>
 
@@ -805,4 +861,368 @@ $call_history = $history_stmt->fetchAll();
                         <div class="mb-3">
 
                             <label class="form-label">
-                               
+                                Call Notes
+                            </label>
+
+                            <textarea
+                                name="call_notes"
+                                class="form-control"
+                                rows="3"
+                                placeholder="Enter notes about the call..."
+                            ><?php
+                            echo htmlspecialchars(
+                                $call_notes
+                            );
+                            ?></textarea>
+
+                        </div>
+
+
+                        <!-- NEXT ACTION -->
+
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                Next Action
+                            </label>
+
+                            <input
+                                type="text"
+                                name="next_action_type"
+                                class="form-control"
+                                value="<?php
+                                echo htmlspecialchars(
+                                    $next_action_type
+                                );
+                                ?>"
+                                placeholder="Example: Follow-up Call"
+                            >
+
+                        </div>
+
+
+                        <!-- NEXT ACTION DATE -->
+
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                Next Action Date & Time
+                            </label>
+
+                            <input
+                                type="datetime-local"
+                                name="next_action_at"
+                                class="form-control"
+                                value="<?php
+                                echo htmlspecialchars(
+                                    $next_action_at
+                                );
+                                ?>"
+                            >
+
+                        </div>
+
+
+                        <!-- CALL DATE -->
+
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                Call Date & Time
+                            </label>
+
+                            <input
+                                type="datetime-local"
+                                name="call_at"
+                                class="form-control"
+                                value="<?php
+                                echo htmlspecialchars(
+                                    $call_at
+                                );
+                                ?>"
+                                required
+                            >
+
+                        </div>
+
+
+                        <!-- BUTTONS -->
+
+                        <div class="d-flex gap-2">
+
+                            <button
+                                type="submit"
+                                class="btn btn-primary"
+                            >
+                                Log Call
+                            </button>
+
+                            <a
+                                href="<?php echo BASE_URL; ?>/telecaller/calls/index.php"
+                                class="btn btn-outline-secondary"
+                            >
+                                Reset
+                            </a>
+
+                        </div>
+
+                    </form>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- CALL HISTORY -->
+
+        <div class="col-lg-7">
+
+            <div class="card shadow-sm border-0">
+
+                <div class="card-header bg-white">
+
+                    <h5 class="mb-0">
+                        Recent Call History
+                    </h5>
+
+                </div>
+
+
+                <div class="card-body p-0">
+
+                    <?php if (empty($call_history)): ?>
+
+                        <div class="p-4 text-muted">
+                            No calls recorded yet.
+                        </div>
+
+                    <?php else: ?>
+
+                        <div class="table-responsive">
+
+                            <table class="table table-hover align-middle mb-0">
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th>
+                                            Lead
+                                        </th>
+
+                                        <th>
+                                            Outcome
+                                        </th>
+
+                                        <th>
+                                            Notes
+                                        </th>
+
+                                        <th>
+                                            Next Action
+                                        </th>
+
+                                        <th>
+                                            Call Time
+                                        </th>
+
+                                    </tr>
+
+                                </thead>
+
+
+                                <tbody>
+
+                                    <?php foreach (
+                                        $call_history
+                                        as $call
+                                    ): ?>
+
+                                        <tr>
+
+                                            <!-- Lead -->
+
+                                            <td>
+
+                                                <div class="fw-semibold">
+
+                                                    <?php
+                                                    echo htmlspecialchars(
+                                                        $call['lead_name']
+                                                    );
+                                                    ?>
+
+                                                </div>
+
+                                                <div class="small text-muted">
+
+                                                    <?php
+                                                    echo htmlspecialchars(
+                                                        $call['lead_phone']
+                                                    );
+                                                    ?>
+
+                                                </div>
+
+                                            </td>
+
+
+                                            <!-- Outcome -->
+
+                                            <td>
+
+                                                <?php
+
+                                                $outcome_class =
+                                                    'bg-secondary';
+
+                                                if (
+                                                    $call['call_outcome']
+                                                    === 'Connected'
+                                                ) {
+
+                                                    $outcome_class =
+                                                        'bg-success';
+
+                                                } elseif (
+                                                    $call['call_outcome']
+                                                    === 'Interested'
+                                                ) {
+
+                                                    $outcome_class =
+                                                        'bg-primary';
+
+                                                } elseif (
+                                                    $call['call_outcome']
+                                                    === 'Appointment Requested'
+                                                ) {
+
+                                                    $outcome_class =
+                                                        'bg-warning text-dark';
+
+                                                } elseif (
+                                                    $call['call_outcome']
+                                                    === 'Not Interested'
+                                                ) {
+
+                                                    $outcome_class =
+                                                        'bg-danger';
+                                                }
+
+                                                ?>
+
+                                                <span
+                                                    class="badge <?php echo $outcome_class; ?>"
+                                                >
+
+                                                    <?php
+                                                    echo htmlspecialchars(
+                                                        $call['call_outcome']
+                                                    );
+                                                    ?>
+
+                                                </span>
+
+                                            </td>
+
+
+                                            <!-- Notes -->
+
+                                            <td>
+
+                                                <span class="small">
+
+                                                    <?php
+                                                    echo htmlspecialchars(
+                                                        $call['call_notes']
+                                                            ?: '-'
+                                                    );
+                                                    ?>
+
+                                                </span>
+
+                                            </td>
+
+
+                                            <!-- Next Action -->
+
+                                            <td>
+
+                                                <?php
+                                                echo htmlspecialchars(
+                                                    $call['next_action_type']
+                                                        ?: '-'
+                                                );
+                                                ?>
+
+                                                <?php if (
+                                                    !empty(
+                                                        $call['next_action_at']
+                                                    )
+                                                ): ?>
+
+                                                    <div class="small text-muted">
+
+                                                        <?php
+                                                        echo date(
+                                                            'd M Y, h:i A',
+                                                            strtotime(
+                                                                $call[
+                                                                    'next_action_at'
+                                                                ]
+                                                            )
+                                                        );
+                                                        ?>
+
+                                                    </div>
+
+                                                <?php endif; ?>
+
+                                            </td>
+
+
+                                            <!-- Call Time -->
+
+                                            <td>
+
+                                                <?php
+                                                echo date(
+                                                    'd M Y, h:i A',
+                                                    strtotime(
+                                                        $call['call_at']
+                                                    )
+                                                );
+                                                ?>
+
+                                            </td>
+
+                                        </tr>
+
+                                    <?php endforeach; ?>
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    <?php endif; ?>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<?php
+
+require_once __DIR__ . '/../../includes/footer.php';
+
+?>

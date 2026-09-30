@@ -1,4 +1,4 @@
-<?php
+ <?php
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/role_check.php';
@@ -7,31 +7,23 @@ require_role('manager');
 
 $user = current_user();
 
-
 /*
 |--------------------------------------------------------------------------
 | Get Team Member ID
 |--------------------------------------------------------------------------
 */
-
-$member_id = isset($_GET['id'])
-    ? (int) $_GET['id']
-    : 0;
+$member_id = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 if ($member_id <= 0) {
-
     http_response_code(400);
-
     exit('Invalid team member.');
 }
-
 
 /*
 |--------------------------------------------------------------------------
 | Get Team Member
 |--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->prepare("
     SELECT
         u.id,
@@ -49,46 +41,35 @@ $stmt = $pdo->prepare("
     LIMIT 1
 ");
 
-$stmt->execute([
-    $member_id
-]);
+$stmt->execute([$member_id]);
 
-$member = $stmt->fetch();
-
+$member = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$member) {
-
     http_response_code(404);
-
     exit('Team member not found.');
 }
 
-
 /*
 |--------------------------------------------------------------------------
-| Total Assigned Leads
+| Assigned Leads
 |--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->prepare("
     SELECT COUNT(*)
     FROM leads
     WHERE assigned_to = ?
 ");
 
-$stmt->execute([
-    $member_id
-]);
+$stmt->execute([$member_id]);
 
 $total_leads = (int) $stmt->fetchColumn();
 
-
 /*
 |--------------------------------------------------------------------------
-| New Assigned Leads
+| New Leads
 |--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->prepare("
     SELECT COUNT(*)
     FROM leads
@@ -96,19 +77,31 @@ $stmt = $pdo->prepare("
       AND status = 'New'
 ");
 
-$stmt->execute([
-    $member_id
-]);
+$stmt->execute([$member_id]);
 
 $new_leads = (int) $stmt->fetchColumn();
 
+/*
+|--------------------------------------------------------------------------
+| Converted Leads
+|--------------------------------------------------------------------------
+*/
+$stmt = $pdo->prepare("
+    SELECT COUNT(*)
+    FROM leads
+    WHERE assigned_to = ?
+      AND status = 'Converted'
+");
+
+$stmt->execute([$member_id]);
+
+$converted_leads = (int) $stmt->fetchColumn();
 
 /*
 |--------------------------------------------------------------------------
 | Calls Today
 |--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->prepare("
     SELECT COUNT(*)
     FROM lead_calls
@@ -116,19 +109,15 @@ $stmt = $pdo->prepare("
       AND DATE(call_at) = CURDATE()
 ");
 
-$stmt->execute([
-    $member_id
-]);
+$stmt->execute([$member_id]);
 
 $calls_today = (int) $stmt->fetchColumn();
-
 
 /*
 |--------------------------------------------------------------------------
 | Activities Today
 |--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->prepare("
     SELECT COUNT(*)
     FROM lead_activities
@@ -136,19 +125,15 @@ $stmt = $pdo->prepare("
       AND DATE(activity_at) = CURDATE()
 ");
 
-$stmt->execute([
-    $member_id
-]);
+$stmt->execute([$member_id]);
 
 $activities_today = (int) $stmt->fetchColumn();
-
 
 /*
 |--------------------------------------------------------------------------
 | Today's Appointments
 |--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->prepare("
     SELECT COUNT(*)
     FROM appointments a
@@ -159,19 +144,15 @@ $stmt = $pdo->prepare("
       AND a.status NOT IN ('Cancelled', 'No Show')
 ");
 
-$stmt->execute([
-    $member_id
-]);
+$stmt->execute([$member_id]);
 
 $appointments_today = (int) $stmt->fetchColumn();
-
 
 /*
 |--------------------------------------------------------------------------
 | Active Appointments
 |--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->prepare("
     SELECT COUNT(*)
     FROM appointments a
@@ -181,40 +162,49 @@ $stmt = $pdo->prepare("
       AND a.status IN ('Scheduled', 'Confirmed')
 ");
 
-$stmt->execute([
-    $member_id
-]);
+$stmt->execute([$member_id]);
 
 $active_appointments = (int) $stmt->fetchColumn();
-
 
 /*
 |--------------------------------------------------------------------------
 | Overdue Follow-ups
 |--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->prepare("
     SELECT COUNT(*)
     FROM leads
     WHERE assigned_to = ?
       AND next_action_at IS NOT NULL
       AND next_action_at < NOW()
+      AND status NOT IN ('Converted', 'Lost')
 ");
 
-$stmt->execute([
-    $member_id
-]);
+$stmt->execute([$member_id]);
 
 $overdue_followups = (int) $stmt->fetchColumn();
 
+/*
+|--------------------------------------------------------------------------
+| Active Tasks
+|--------------------------------------------------------------------------
+*/
+$stmt = $pdo->prepare("
+    SELECT COUNT(*)
+    FROM tasks
+    WHERE assigned_to = ?
+      AND status NOT IN ('Completed', 'Cancelled')
+");
+
+$stmt->execute([$member_id]);
+
+$active_tasks = (int) $stmt->fetchColumn();
 
 /*
 |--------------------------------------------------------------------------
 | Recent Activities
 |--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->prepare("
     SELECT
         la.activity_type,
@@ -230,19 +220,15 @@ $stmt = $pdo->prepare("
     LIMIT 10
 ");
 
-$stmt->execute([
-    $member_id
-]);
+$stmt->execute([$member_id]);
 
-$recent_activities = $stmt->fetchAll();
-
+$recent_activities = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 /*
 |--------------------------------------------------------------------------
 | Recent Assigned Leads
 |--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->prepare("
     SELECT
         id,
@@ -260,19 +246,15 @@ $stmt = $pdo->prepare("
     LIMIT 10
 ");
 
-$stmt->execute([
-    $member_id
-]);
+$stmt->execute([$member_id]);
 
-$recent_leads = $stmt->fetchAll();
-
+$recent_leads = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 /*
 |--------------------------------------------------------------------------
 | Upcoming Appointments
 |--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->prepare("
     SELECT
         a.id,
@@ -292,39 +274,35 @@ $stmt = $pdo->prepare("
     LIMIT 10
 ");
 
-$stmt->execute([
-    $member_id
-]);
+$stmt->execute([$member_id]);
 
-$upcoming_appointments = $stmt->fetchAll();
+$upcoming_appointments = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-
+/*
+|--------------------------------------------------------------------------
+| Page Setup
+|--------------------------------------------------------------------------
+*/
 $page_title = 'Team Member Profile';
 
 require_once __DIR__ . '/../../includes/header.php';
 
 ?>
 
-
 <div class="container py-4">
 
-
     <!-- Page Header -->
-
     <div class="d-flex justify-content-between align-items-center mb-4">
 
         <div>
-
             <h2 class="hm-page-title mb-1">
                 Team Member Profile
             </h2>
 
             <p class="hm-muted mb-0">
-                View team member information and activity summary.
+                View team member information, workload and activity summary.
             </p>
-
         </div>
-
 
         <a
             href="<?php echo BASE_URL; ?>/manager/team/"
@@ -337,7 +315,6 @@ require_once __DIR__ . '/../../includes/header.php';
 
 
     <!-- Profile Card -->
-
     <div class="hm-card p-4 mb-4">
 
         <div class="row align-items-center">
@@ -345,54 +322,34 @@ require_once __DIR__ . '/../../includes/header.php';
             <div class="col-md-8">
 
                 <h3 class="hm-page-title mb-1">
-
-                    <?php
-                    echo htmlspecialchars(
-                        $member['name']
-                    );
-                    ?>
-
+                    <?php echo htmlspecialchars($member['name'] ?? ''); ?>
                 </h3>
 
-
                 <p class="hm-muted mb-2">
-
-                    <?php
-                    echo htmlspecialchars(
-                        $member['email']
-                    );
-                    ?>
-
+                    <?php echo htmlspecialchars($member['email'] ?? ''); ?>
                 </p>
-
 
                 <div class="d-flex flex-wrap gap-2">
 
                     <span class="badge bg-secondary">
-
                         <?php
                         echo htmlspecialchars(
-                            $member['role_display_name']
+                            $member['role_display_name'] ?? $member['role_name'] ?? ''
                         );
                         ?>
-
                     </span>
 
-
                     <span class="badge bg-success">
-
                         <?php
                         echo htmlspecialchars(
-                            ucfirst($member['status'])
+                            ucfirst($member['status'] ?? '')
                         );
                         ?>
-
                     </span>
 
                 </div>
 
             </div>
-
 
             <div class="col-md-4 text-md-end mt-3 mt-md-0">
 
@@ -401,16 +358,12 @@ require_once __DIR__ . '/../../includes/header.php';
                 </div>
 
                 <strong>
-
                     <?php
                     echo date(
                         'd M Y',
-                        strtotime(
-                            $member['created_at']
-                        )
+                        strtotime($member['created_at'])
                     );
                     ?>
-
                 </strong>
 
             </div>
@@ -420,14 +373,11 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 
 
-    <!-- Performance Cards -->
-
+    <!-- Performance Summary -->
     <div class="row g-3 mb-4">
 
-
-        <!-- Total Leads -->
-
-        <div class="col-md-3">
+        <!-- Assigned Leads -->
+        <div class="col-md-4 col-lg-3">
 
             <div class="hm-card p-4 h-100">
 
@@ -445,8 +395,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
 
         <!-- New Leads -->
-
-        <div class="col-md-3">
+        <div class="col-md-4 col-lg-3">
 
             <div class="hm-card p-4 h-100">
 
@@ -463,9 +412,26 @@ require_once __DIR__ . '/../../includes/header.php';
         </div>
 
 
-        <!-- Calls Today -->
+        <!-- Converted Leads -->
+        <div class="col-md-4 col-lg-3">
 
-        <div class="col-md-3">
+            <div class="hm-card p-4 h-100">
+
+                <div class="hm-muted">
+                    Converted Leads
+                </div>
+
+                <h2 class="mb-0">
+                    <?php echo $converted_leads; ?>
+                </h2>
+
+            </div>
+
+        </div>
+
+
+        <!-- Calls Today -->
+        <div class="col-md-4 col-lg-3">
 
             <div class="hm-card p-4 h-100">
 
@@ -483,8 +449,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
 
         <!-- Activities Today -->
-
-        <div class="col-md-3">
+        <div class="col-md-4 col-lg-3">
 
             <div class="hm-card p-4 h-100">
 
@@ -500,17 +465,27 @@ require_once __DIR__ . '/../../includes/header.php';
 
         </div>
 
-    </div>
 
+        <!-- Active Tasks -->
+        <div class="col-md-4 col-lg-3">
 
-    <!-- Second Performance Row -->
+            <div class="hm-card p-4 h-100">
 
-    <div class="row g-3 mb-4">
+                <div class="hm-muted">
+                    Active Tasks
+                </div>
+
+                <h2 class="mb-0">
+                    <?php echo $active_tasks; ?>
+                </h2>
+
+            </div>
+
+        </div>
 
 
         <!-- Today's Appointments -->
-
-        <div class="col-md-4">
+        <div class="col-md-4 col-lg-3">
 
             <div class="hm-card p-4 h-100">
 
@@ -527,28 +502,8 @@ require_once __DIR__ . '/../../includes/header.php';
         </div>
 
 
-        <!-- Active Appointments -->
-
-        <div class="col-md-4">
-
-            <div class="hm-card p-4 h-100">
-
-                <div class="hm-muted">
-                    Active Appointments
-                </div>
-
-                <h2 class="mb-0">
-                    <?php echo $active_appointments; ?>
-                </h2>
-
-            </div>
-
-        </div>
-
-
         <!-- Overdue Follow-ups -->
-
-        <div class="col-md-4">
+        <div class="col-md-4 col-lg-3">
 
             <div class="hm-card p-4 h-100">
 
@@ -556,7 +511,9 @@ require_once __DIR__ . '/../../includes/header.php';
                     Overdue Follow-ups
                 </div>
 
-                <h2 class="mb-0 text-danger">
+                <h2
+                    class="mb-0 <?php echo $overdue_followups > 0 ? 'text-danger' : ''; ?>"
+                >
                     <?php echo $overdue_followups; ?>
                 </h2>
 
@@ -567,16 +524,82 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 
 
+    <!-- Second Summary -->
+    <div class="row g-3 mb-4">
+
+        <div class="col-md-6">
+
+            <div class="hm-card p-4 h-100">
+
+                <div class="d-flex justify-content-between align-items-center">
+
+                    <div>
+                        <div class="hm-muted">
+                            Active Appointments
+                        </div>
+
+                        <h3 class="mb-0">
+                            <?php echo $active_appointments; ?>
+                        </h3>
+                    </div>
+
+                    <div class="text-end">
+                        <small class="hm-muted">
+                            Current scheduled/confirmed
+                        </small>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-md-6">
+
+            <div class="hm-card p-4 h-100">
+
+                <div class="d-flex justify-content-between align-items-center">
+
+                    <div>
+                        <div class="hm-muted">
+                            Lead Conversion
+                        </div>
+
+                        <h3 class="mb-0">
+                            <?php
+                            echo $total_leads > 0
+                                ? round(($converted_leads / $total_leads) * 100, 1) . '%'
+                                : '0%';
+                            ?>
+                        </h3>
+                    </div>
+
+                    <div>
+                        <small class="hm-muted">
+                            Based on assigned leads
+                        </small>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- Activity + Appointments -->
     <div class="row g-4">
 
-
         <!-- Recent Activities -->
-
         <div class="col-lg-6">
 
             <div class="hm-card p-4 h-100">
 
-                <div class="d-flex justify-content-between mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
 
                     <h5 class="mb-0">
                         Recent Activities
@@ -593,50 +616,40 @@ require_once __DIR__ . '/../../includes/header.php';
 
                 <?php else: ?>
 
-
                     <?php foreach ($recent_activities as $activity): ?>
 
                         <div class="border-bottom py-3">
 
-                            <div class="d-flex justify-content-between">
+                            <div class="d-flex justify-content-between gap-3">
 
                                 <strong>
-
                                     <?php
                                     echo htmlspecialchars(
-                                        $activity['lead_name']
+                                        $activity['lead_name'] ?? ''
                                     );
                                     ?>
-
                                 </strong>
 
-
-                                <span class="small hm-muted">
-
+                                <span class="small hm-muted text-nowrap">
                                     <?php
                                     echo date(
                                         'd M Y, h:i A',
-                                        strtotime(
-                                            $activity['activity_at']
-                                        )
+                                        strtotime($activity['activity_at'])
                                     );
                                     ?>
-
                                 </span>
 
                             </div>
 
 
-                            <div class="mt-1">
+                            <div class="mt-2">
 
                                 <span class="badge bg-secondary">
-
                                     <?php
                                     echo htmlspecialchars(
-                                        $activity['activity_type']
+                                        $activity['activity_type'] ?? ''
                                     );
                                     ?>
-
                                 </span>
 
                             </div>
@@ -646,7 +659,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                 <?php
                                 echo htmlspecialchars(
-                                    $activity['description']
+                                    $activity['description'] ?? ''
                                 );
                                 ?>
 
@@ -656,7 +669,6 @@ require_once __DIR__ . '/../../includes/header.php';
 
                     <?php endforeach; ?>
 
-
                 <?php endif; ?>
 
             </div>
@@ -665,12 +677,11 @@ require_once __DIR__ . '/../../includes/header.php';
 
 
         <!-- Upcoming Appointments -->
-
         <div class="col-lg-6">
 
             <div class="hm-card p-4 h-100">
 
-                <div class="d-flex justify-content-between mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
 
                     <h5 class="mb-0">
                         Upcoming Appointments
@@ -687,25 +698,21 @@ require_once __DIR__ . '/../../includes/header.php';
 
                 <?php else: ?>
 
-
                     <?php foreach ($upcoming_appointments as $appointment): ?>
 
                         <div class="border-bottom py-3">
 
-                            <div class="d-flex justify-content-between">
+                            <div class="d-flex justify-content-between gap-3">
 
                                 <strong>
-
                                     <?php
                                     echo htmlspecialchars(
-                                        $appointment['lead_name']
+                                        $appointment['lead_name'] ?? ''
                                     );
                                     ?>
-
                                 </strong>
 
-
-                                <span class="small">
+                                <span class="small text-nowrap">
 
                                     <?php
                                     echo date(
@@ -721,11 +728,11 @@ require_once __DIR__ . '/../../includes/header.php';
                             </div>
 
 
-                            <div class="small hm-muted">
+                            <div class="small hm-muted mt-1">
 
                                 <?php
                                 echo htmlspecialchars(
-                                    $appointment['lead_phone']
+                                    $appointment['lead_phone'] ?? ''
                                 );
                                 ?>
 
@@ -738,11 +745,26 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                     <?php
                                     echo htmlspecialchars(
-                                        $appointment['status']
+                                        $appointment['status'] ?? ''
                                     );
                                     ?>
 
                                 </span>
+
+
+                                <?php if (!empty($appointment['appointment_type'])): ?>
+
+                                    <span class="badge bg-light text-dark border ms-1">
+
+                                        <?php
+                                        echo htmlspecialchars(
+                                            $appointment['appointment_type']
+                                        );
+                                        ?>
+
+                                    </span>
+
+                                <?php endif; ?>
 
 
                                 <a
@@ -758,7 +780,6 @@ require_once __DIR__ . '/../../includes/header.php';
 
                     <?php endforeach; ?>
 
-
                 <?php endif; ?>
 
             </div>
@@ -767,12 +788,11 @@ require_once __DIR__ . '/../../includes/header.php';
 
 
         <!-- Recent Assigned Leads -->
-
         <div class="col-12">
 
             <div class="hm-card p-4">
 
-                <div class="d-flex justify-content-between mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
 
                     <h5 class="mb-0">
                         Recent Assigned Leads
@@ -796,43 +816,20 @@ require_once __DIR__ . '/../../includes/header.php';
 
                 <?php else: ?>
 
-
                     <div class="table-responsive">
 
-                        <table class="table align-middle">
+                        <table class="table align-middle mb-0">
 
                             <thead>
 
                                 <tr>
-
-                                    <th>
-                                        Lead
-                                    </th>
-
-                                    <th>
-                                        Phone
-                                    </th>
-
-                                    <th>
-                                        Service
-                                    </th>
-
-                                    <th>
-                                        Status
-                                    </th>
-
-                                    <th>
-                                        Priority
-                                    </th>
-
-                                    <th>
-                                        Next Action
-                                    </th>
-
-                                    <th>
-                                        Action
-                                    </th>
-
+                                    <th>Lead</th>
+                                    <th>Phone</th>
+                                    <th>Service</th>
+                                    <th>Status</th>
+                                    <th>Priority</th>
+                                    <th>Next Action</th>
+                                    <th>Action</th>
                                 </tr>
 
                             </thead>
@@ -840,56 +837,56 @@ require_once __DIR__ . '/../../includes/header.php';
 
                             <tbody>
 
-
                                 <?php foreach ($recent_leads as $lead): ?>
 
                                     <tr>
 
+                                        <!-- Lead -->
                                         <td>
 
                                             <strong>
-
                                                 <?php
                                                 echo htmlspecialchars(
-                                                    $lead['name']
+                                                    $lead['name'] ?? ''
                                                 );
                                                 ?>
-
                                             </strong>
 
                                         </td>
 
 
+                                        <!-- Phone -->
                                         <td>
 
                                             <?php
                                             echo htmlspecialchars(
-                                                $lead['phone']
+                                                $lead['phone'] ?? ''
                                             );
                                             ?>
 
                                         </td>
 
 
+                                        <!-- Service -->
                                         <td>
 
                                             <?php
                                             echo htmlspecialchars(
-                                                $lead['service_interest']
-                                                ?: '-'
+                                                $lead['service_interest'] ?: '-'
                                             );
                                             ?>
 
                                         </td>
 
 
+                                        <!-- Status -->
                                         <td>
 
                                             <span class="badge bg-secondary">
 
                                                 <?php
                                                 echo htmlspecialchars(
-                                                    $lead['status']
+                                                    $lead['status'] ?? ''
                                                 );
                                                 ?>
 
@@ -898,17 +895,19 @@ require_once __DIR__ . '/../../includes/header.php';
                                         </td>
 
 
+                                        <!-- Priority -->
                                         <td>
 
                                             <?php
                                             echo htmlspecialchars(
-                                                $lead['priority']
+                                                $lead['priority'] ?? '-'
                                             );
                                             ?>
 
                                         </td>
 
 
+                                        <!-- Next Action -->
                                         <td>
 
                                             <?php if (!empty($lead['next_action_at'])): ?>
@@ -917,8 +916,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                                     <?php
                                                     echo htmlspecialchars(
-                                                        $lead['next_action_type']
-                                                        ?: 'Action'
+                                                        $lead['next_action_type'] ?: 'Action'
                                                     );
                                                     ?>
 
@@ -948,6 +946,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                         </td>
 
 
+                                        <!-- Action -->
                                         <td>
 
                                             <a
@@ -963,13 +962,11 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                 <?php endforeach; ?>
 
-
                             </tbody>
 
                         </table>
 
                     </div>
-
 
                 <?php endif; ?>
 

@@ -9,7 +9,7 @@ require_once __DIR__ . '/includes/header.php';
  
 
 
-<main class="container py-5">
+<main class="container py-4">
 
     <div class="hm-card p-5 text-center">
 

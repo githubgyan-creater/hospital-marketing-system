@@ -1,16 +1,19 @@
-<?php
+ <?php
 
-require_once __DIR__ . '/../../includes/role_check.php';
+require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/role_check.php';
 
 require_role('admin');
 
 $user = current_user();
 
+
 /*
-
+|--------------------------------------------------------------------------
 | Get Role ID
-
+|--------------------------------------------------------------------------
 */
 
 $role_id = filter_input(
@@ -20,18 +23,21 @@ $role_id = filter_input(
 );
 
 if (!$role_id) {
+
     header(
         'Location: ' .
         BASE_URL .
         '/admin/roles/'
     );
+
     exit;
 }
 
+
 /*
-
+|--------------------------------------------------------------------------
 | Fetch Role
-
+|--------------------------------------------------------------------------
 */
 
 $stmt = $pdo->prepare("
@@ -48,17 +54,21 @@ $stmt->execute([
     $role_id
 ]);
 
-$role = $stmt->fetch();
+$role = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$role) {
+
     http_response_code(404);
+
     exit('Role not found.');
+
 }
 
+
 /*
-
+|--------------------------------------------------------------------------
 | Handle Permission Update
-
+|--------------------------------------------------------------------------
 */
 
 $message = '';
@@ -66,30 +76,61 @@ $message_type = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Get Selected Permissions
+    |--------------------------------------------------------------------------
+    */
+
     $selected_permissions =
         $_POST['permissions'] ?? [];
 
     if (!is_array($selected_permissions)) {
+
         $selected_permissions = [];
+
     }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Convert IDs To Integers
+    |--------------------------------------------------------------------------
+    */
 
     $selected_permissions = array_map(
         'intval',
         $selected_permissions
     );
 
+    $selected_permissions = array_filter(
+        $selected_permissions,
+        function ($permission_id) {
+            return $permission_id > 0;
+        }
+    );
+
     $selected_permissions = array_unique(
         $selected_permissions
     );
 
+
     try {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Start Transaction
+        |--------------------------------------------------------------------------
+        */
 
         $pdo->beginTransaction();
 
+
         /*
-        
-        | Remove old permissions
-        
+        |--------------------------------------------------------------------------
+        | Remove Existing Permissions
+        |--------------------------------------------------------------------------
         */
 
         $delete_stmt = $pdo->prepare("
@@ -101,13 +142,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $role_id
         ]);
 
+
         /*
-        
-        | Add selected permissions
-        
+        |--------------------------------------------------------------------------
+        | Verify Permission IDs
+        |--------------------------------------------------------------------------
         */
 
         if (!empty($selected_permissions)) {
+
+            $check_stmt = $pdo->prepare("
+                SELECT id
+                FROM permissions
+                WHERE id = ?
+                LIMIT 1
+            ");
+
 
             $insert_stmt = $pdo->prepare("
                 INSERT INTO role_permissions
@@ -116,24 +166,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (?, ?)
             ");
 
+
             foreach ($selected_permissions as $permission_id) {
 
+
                 /*
-                | Verify permission exists
+                |--------------------------------------------------------------------------
+                | Confirm Permission Exists
+                |--------------------------------------------------------------------------
                 */
-                $check_stmt = $pdo->prepare("
-                    SELECT id
-                    FROM permissions
-                    WHERE id = ?
-                    LIMIT 1
-                ");
 
                 $check_stmt->execute([
                     $permission_id
                 ]);
 
                 $permission_exists =
-                    $check_stmt->fetch();
+                    $check_stmt->fetchColumn();
+
 
                 if ($permission_exists) {
 
@@ -141,35 +190,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $role_id,
                         $permission_id
                     ]);
+
                 }
+
             }
+
         }
 
+
+        /*
+        |--------------------------------------------------------------------------
+        | Commit
+        |--------------------------------------------------------------------------
+        */
+
         $pdo->commit();
+
 
         $message =
             'Permissions updated successfully.';
 
         $message_type = 'success';
 
+
     } catch (Throwable $e) {
 
+
+        /*
+        |--------------------------------------------------------------------------
+        | Rollback On Error
+        |--------------------------------------------------------------------------
+        */
+
         if ($pdo->inTransaction()) {
+
             $pdo->rollBack();
+
         }
 
+
         $message =
-            'Unable to update permissions: ' .
-            $e->getMessage();
+            'Unable to update permissions.';
 
         $message_type = 'danger';
+
     }
+
 }
 
+
 /*
-
+|--------------------------------------------------------------------------
 | Fetch All Permissions
-
+|--------------------------------------------------------------------------
 */
 
 $stmt = $pdo->query("
@@ -184,12 +257,13 @@ $stmt = $pdo->query("
         id ASC
 ");
 
-$permissions = $stmt->fetchAll();
+$permissions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 
 /*
-
+|--------------------------------------------------------------------------
 | Fetch Current Role Permissions
-
+|--------------------------------------------------------------------------
 */
 
 $stmt = $pdo->prepare("
@@ -203,38 +277,53 @@ $stmt->execute([
 ]);
 
 $current_permission_ids =
-    $stmt->fetchAll(
-        PDO::FETCH_COLUMN
-    );
+    $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-$current_permission_ids =
-    array_map(
-        'intval',
-        $current_permission_ids
-    );
+
+$current_permission_ids = array_map(
+    'intval',
+    $current_permission_ids
+);
+
 
 /*
-
+|--------------------------------------------------------------------------
 | Group Permissions By Module
-
+|--------------------------------------------------------------------------
 */
 
 $grouped_permissions = [];
+
 
 foreach ($permissions as $permission) {
 
     $module = $permission['module'];
 
     if (!isset($grouped_permissions[$module])) {
+
         $grouped_permissions[$module] = [];
+
     }
 
     $grouped_permissions[$module][] =
         $permission;
+
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| Count Selected Permissions
+|--------------------------------------------------------------------------
+*/
+
+$selected_permission_count =
+    count($current_permission_ids);
+
 ?>
+
 <!DOCTYPE html>
+
 <html lang="en">
 
 <head>
@@ -250,10 +339,18 @@ foreach ($permissions as $permission) {
         Manage Role Permissions
     </title>
 
+
     <link
         href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
         rel="stylesheet"
     >
+
+
+    <link
+        rel="stylesheet"
+        href="<?= BASE_URL; ?>/assets/css/style.css"
+    >
+
 
     <style>
 
@@ -289,6 +386,7 @@ foreach ($permissions as $permission) {
             border-radius: 12px;
             margin-bottom: 20px;
             overflow: hidden;
+            background: #ffffff;
         }
 
         .module-header {
@@ -310,6 +408,7 @@ foreach ($permissions as $permission) {
         .permission-name {
             color: #71808c;
             font-size: 13px;
+            margin-top: 2px;
         }
 
         .role-box {
@@ -343,22 +442,32 @@ foreach ($permissions as $permission) {
             color: #ffffff;
         }
 
+        .selected-count {
+            background: #b89a5a;
+            color: #ffffff;
+            font-weight: 600;
+        }
+
     </style>
-    
-    <link
-    rel="stylesheet"
-    href="<?php echo BASE_URL; ?>/assets/css/style.css"
->
 
 </head>
 
 <body>
 
- <?php
+
+<?php
+
 require_once __DIR__ . '/../../includes/navbar.php';
+
 ?>
 
+
 <div class="container py-4">
+
+
+    <!-- =====================================================
+         PAGE HEADER
+    ====================================================== -->
 
     <div class="d-flex justify-content-between align-items-center mb-4">
 
@@ -374,8 +483,9 @@ require_once __DIR__ . '/../../includes/navbar.php';
 
         </div>
 
+
         <a
-            href="<?php echo BASE_URL; ?>/admin/roles/"
+            href="<?= BASE_URL; ?>/admin/roles/"
             class="btn btn-outline-secondary"
         >
             ← Back to Roles
@@ -383,150 +493,215 @@ require_once __DIR__ . '/../../includes/navbar.php';
 
     </div>
 
+
+    <!-- =====================================================
+         MESSAGE
+    ====================================================== -->
+
     <?php if ($message !== ''): ?>
 
         <div
-            class="alert alert-<?php echo htmlspecialchars($message_type); ?>"
+            class="alert alert-<?= htmlspecialchars($message_type); ?>"
+            role="alert"
         >
 
-            <?php
-            echo htmlspecialchars($message);
-            ?>
+            <?= htmlspecialchars($message); ?>
 
         </div>
 
     <?php endif; ?>
 
+
+    <!-- =====================================================
+         ROLE INFORMATION
+    ====================================================== -->
+
     <div class="role-box mb-4">
+
 
         <div class="row align-items-center">
 
-            <div class="col-md-6">
+
+            <div class="col-md-5">
 
                 <div class="text-muted small">
                     Role
                 </div>
 
                 <h4 class="mb-0">
-                    <?php
-                    echo htmlspecialchars(
+
+                    <?= htmlspecialchars(
                         $role['display_name']
-                    );
-                    ?>
+                    ); ?>
+
                 </h4>
 
             </div>
 
-            <div class="col-md-6 mt-3 mt-md-0">
+
+            <div class="col-md-4 mt-3 mt-md-0">
 
                 <div class="text-muted small">
                     Role Code
                 </div>
 
                 <strong>
-                    <?php
-                    echo htmlspecialchars(
+
+                    <?= htmlspecialchars(
                         $role['name']
-                    );
-                    ?>
+                    ); ?>
+
                 </strong>
 
             </div>
 
-        </div>
 
-    </div>
+            <div class="col-md-3 mt-3 mt-md-0">
 
-    <form method="POST">
-
-        <?php foreach (
-            $grouped_permissions
-            as $module => $module_permissions
-        ): ?>
-
-            <div class="module-card">
-
-                <div class="module-header">
-
-                    <?php
-                    echo htmlspecialchars(
-                        $module
-                    );
-                    ?>
-
+                <div class="text-muted small">
+                    Assigned Permissions
                 </div>
 
-                <?php foreach (
-                    $module_permissions
-                    as $permission
-                ): ?>
+                <span class="badge selected-count">
 
-                    <div class="permission-row">
+                    <?= $selected_permission_count; ?>
 
-                        <div
-                            class="form-check"
-                        >
-
-                            <input
-                                class="form-check-input"
-                                type="checkbox"
-                                name="permissions[]"
-                                value="<?php echo (int) $permission['id']; ?>"
-                                id="permission_<?php echo (int) $permission['id']; ?>"
-                                <?php
-                                if (
-                                    in_array(
-                                        (int) $permission['id'],
-                                        $current_permission_ids,
-                                        true
-                                    )
-                                ) {
-                                    echo 'checked';
-                                }
-                                ?>
-                            >
-
-                            <label
-                                class="form-check-label fw-semibold"
-                                for="permission_<?php echo (int) $permission['id']; ?>"
-                            >
-
-                                <?php
-                                echo htmlspecialchars(
-                                    $permission['display_name']
-                                );
-                                ?>
-
-                            </label>
-
-                            <div class="permission-name">
-
-                                <?php
-                                echo htmlspecialchars(
-                                    $permission['name']
-                                );
-                                ?>
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                <?php endforeach; ?>
+                </span>
 
             </div>
 
-        <?php endforeach; ?>
+
+        </div>
+
+
+    </div>
+
+
+    <!-- =====================================================
+         PERMISSIONS FORM
+    ====================================================== -->
+
+    <form method="POST">
+
+
+        <?php if (!empty($grouped_permissions)): ?>
+
+
+            <?php foreach (
+                $grouped_permissions
+                as $module => $module_permissions
+            ): ?>
+
+
+                <div class="module-card">
+
+
+                    <!-- Module Header -->
+
+                    <div class="module-header">
+
+                        <?= htmlspecialchars(
+                            $module
+                        ); ?>
+
+                    </div>
+
+
+                    <!-- Module Permissions -->
+
+                    <?php foreach (
+                        $module_permissions
+                        as $permission
+                    ): ?>
+
+
+                        <div class="permission-row">
+
+
+                            <div class="form-check">
+
+
+                                <input
+                                    class="form-check-input"
+                                    type="checkbox"
+                                    name="permissions[]"
+                                    value="<?= (int) $permission['id']; ?>"
+                                    id="permission_<?= (int) $permission['id']; ?>"
+                                    <?= in_array(
+                                        (int) $permission['id'],
+                                        $current_permission_ids,
+                                        true
+                                    ) ? 'checked' : ''; ?>
+                                >
+
+
+                                <label
+                                    class="form-check-label fw-semibold"
+                                    for="permission_<?= (int) $permission['id']; ?>"
+                                >
+
+                                    <?= htmlspecialchars(
+                                        $permission['display_name']
+                                    ); ?>
+
+                                </label>
+
+
+                                <div class="permission-name">
+
+                                    <?= htmlspecialchars(
+                                        $permission['name']
+                                    ); ?>
+
+                                </div>
+
+
+                            </div>
+
+
+                        </div>
+
+
+                    <?php endforeach; ?>
+
+
+                </div>
+
+
+            <?php endforeach; ?>
+
+
+        <?php else: ?>
+
+
+            <div class="card page-card mb-4">
+
+                <div class="card-body text-center text-muted py-5">
+
+                    No permissions found.
+
+                </div>
+
+            </div>
+
+
+        <?php endif; ?>
+
+
+        <!-- =================================================
+             FORM ACTIONS
+        ================================================== -->
 
         <div class="d-flex justify-content-end gap-2 mb-5">
 
+
             <a
-                href="<?php echo BASE_URL; ?>/admin/roles/"
+                href="<?= BASE_URL; ?>/admin/roles/"
                 class="btn btn-outline-secondary"
             >
                 Cancel
             </a>
+
 
             <button
                 type="submit"
@@ -535,11 +710,15 @@ require_once __DIR__ . '/../../includes/navbar.php';
                 Save Permissions
             </button>
 
+
         </div>
+
 
     </form>
 
+
 </div>
+
 
 <script
     src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"

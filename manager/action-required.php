@@ -1,4 +1,4 @@
-<?php
+ <?php
 
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -8,10 +8,26 @@ require_login();
 
 $user = current_user();
 
-if (!$user || !in_array($user['role'], ['admin', 'manager'], true)) {
+if (
+    !$user ||
+    !in_array(
+        $user['role'],
+        ['admin', 'manager'],
+        true
+    )
+) {
     http_response_code(403);
     exit('Access denied.');
 }
+
+
+/*
+|--------------------------------------------------------------------------
+| PAGE TITLE
+|--------------------------------------------------------------------------
+*/
+
+$page_title = 'Action Required';
 
 
 /*
@@ -30,20 +46,17 @@ $overdue_followups_stmt = $pdo->query("
         l.next_action_type,
         l.next_action_at,
         u.name AS assigned_staff
-
     FROM leads l
-
     LEFT JOIN users u
         ON l.assigned_to = u.id
-
     WHERE l.next_action_at IS NOT NULL
       AND l.next_action_at < NOW()
       AND l.status NOT IN ('Converted', 'Lost')
-
     ORDER BY l.next_action_at ASC
 ");
 
-$overdue_followups = $overdue_followups_stmt->fetchAll();
+$overdue_followups =
+    $overdue_followups_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 
 /*
@@ -58,18 +71,18 @@ $unassigned_leads_stmt = $pdo->query("
         l.name,
         l.phone,
         l.email,
+        l.service_interest,
         l.status,
         l.priority,
         l.created_at
-
     FROM leads l
-
     WHERE l.assigned_to IS NULL
-
+      AND l.status NOT IN ('Converted', 'Lost')
     ORDER BY l.created_at DESC
 ");
 
-$unassigned_leads = $unassigned_leads_stmt->fetchAll();
+$unassigned_leads =
+    $unassigned_leads_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 
 /*
@@ -87,19 +100,16 @@ $overdue_tasks_stmt = $pdo->query("
         t.priority,
         t.status,
         u.name AS assigned_staff
-
     FROM tasks t
-
     INNER JOIN users u
         ON t.assigned_to = u.id
-
     WHERE t.due_date < NOW()
       AND t.status NOT IN ('Completed', 'Cancelled')
-
     ORDER BY t.due_date ASC
 ");
 
-$overdue_tasks = $overdue_tasks_stmt->fetchAll();
+$overdue_tasks =
+    $overdue_tasks_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 
 /*
@@ -115,23 +125,18 @@ $pending_appointments_stmt = $pdo->query("
         a.appointment_date,
         a.appointment_type,
         a.status,
-
         l.name AS lead_name,
         l.phone AS lead_phone
-
     FROM appointments a
-
     INNER JOIN leads l
         ON a.lead_id = l.id
-
     WHERE a.status IN ('Scheduled', 'Confirmed')
       AND a.appointment_date <= NOW()
-
     ORDER BY a.appointment_date ASC
 ");
 
 $pending_appointments =
-    $pending_appointments_stmt->fetchAll();
+    $pending_appointments_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 
 /*
@@ -149,22 +154,17 @@ $overdue_visits_stmt = $pdo->query("
         mv.person_name,
         mv.organization_name,
         mv.status,
-
         u.name AS assigned_staff
-
     FROM marketing_visits mv
-
     INNER JOIN users u
         ON mv.assigned_to = u.id
-
     WHERE mv.status = 'Planned'
       AND mv.visit_date < NOW()
-
     ORDER BY mv.visit_date ASC
 ");
 
 $overdue_visits =
-    $overdue_visits_stmt->fetchAll();
+    $overdue_visits_stmt->fetchAll(PDO::FETCH_ASSOC);
 
 
 /*
@@ -195,65 +195,350 @@ $total_actions =
     + $pending_appointments_count
     + $overdue_visits_count;
 
+
+/*
+|--------------------------------------------------------------------------
+| HELPER FUNCTIONS
+|--------------------------------------------------------------------------
+*/
+
+function action_status_class(string $status): string
+{
+    switch ($status) {
+
+        case 'New':
+            return 'bg-primary';
+
+        case 'Contacted':
+            return 'bg-info text-dark';
+
+        case 'Interested':
+            return 'bg-warning text-dark';
+
+        case 'Converted':
+            return 'bg-success';
+
+        case 'Lost':
+            return 'bg-danger';
+
+        case 'Scheduled':
+            return 'bg-primary';
+
+        case 'Confirmed':
+            return 'bg-success';
+
+        case 'Completed':
+            return 'bg-dark';
+
+        case 'Cancelled':
+            return 'bg-danger';
+
+        case 'No Show':
+            return 'bg-warning text-dark';
+
+        case 'Planned':
+            return 'bg-primary';
+
+        default:
+            return 'bg-secondary';
+    }
+}
+
+
+function action_priority_class(string $priority): string
+{
+    switch ($priority) {
+
+        case 'High':
+            return 'bg-danger';
+
+        case 'Medium':
+            return 'bg-warning text-dark';
+
+        case 'Low':
+            return 'bg-secondary';
+
+        default:
+            return 'bg-secondary';
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| SHARED HEADER
+|--------------------------------------------------------------------------
+*/
+
+require_once __DIR__ . '/../includes/header.php';
+
 ?>
 
-<?php require_once __DIR__ . '/../includes/header.php'; ?>
+<style>
+
+    .action-summary-card {
+        background: #ffffff;
+        border: 1px solid #e5e1d7;
+        border-radius: 14px;
+        padding: 22px;
+        height: 100%;
+        box-shadow: 0 4px 18px rgba(23, 50, 77, 0.05);
+    }
+
+    .action-summary-label {
+        color: #71808c;
+        font-size: 0.9rem;
+        margin-bottom: 5px;
+    }
+
+    .action-summary-number {
+        color: #17324d;
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .action-section {
+        background: #ffffff;
+        border: 1px solid #e5e1d7;
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 4px 18px rgba(23, 50, 77, 0.05);
+    }
+
+    .action-section-header {
+        padding: 20px 22px;
+        border-bottom: 1px solid #eeeeee;
+    }
+
+    .action-section-body {
+        background: #ffffff;
+    }
+
+    .action-table {
+        margin-bottom: 0;
+    }
+
+    .action-table th {
+        white-space: nowrap;
+        background: #faf9f6;
+    }
+
+    .action-table td {
+        vertical-align: middle;
+    }
+
+    .action-empty {
+        padding: 24px;
+    }
+
+    .action-title {
+        color: #17324d;
+        font-weight: 700;
+    }
+
+</style>
 
 
 <div class="container py-4">
 
 
-    <!-- PAGE HEADER -->
+    <!-- =========================================================
+         PAGE HEADER
+    ========================================================== -->
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4">
 
         <div>
 
-            <h2 class="mb-1">
+            <h1 class="hm-page-title mb-1">
                 Action Required
-            </h2>
+            </h1>
 
-            <p class="text-muted mb-0">
+            <p class="hm-muted mb-0">
                 Items that require manager attention.
             </p>
 
         </div>
 
 
-        <a
-            href="<?php echo BASE_URL; ?>/manager/control-center.php"
-            class="btn btn-outline-secondary"
-        >
-            Back to Control Center
-        </a>
+        <div class="d-flex gap-2 mt-3 mt-md-0">
+
+            <a
+                href="<?php echo BASE_URL; ?>/manager/control-center.php"
+                class="btn btn-outline-secondary"
+            >
+                Back to Control Center
+            </a>
+
+        </div>
 
     </div>
 
 
-    <!-- TOTAL -->
+    <!-- =========================================================
+         TOTAL ACTION ITEMS
+    ========================================================== -->
 
-    <div class="card shadow-sm border-0 mb-4">
+    <div class="action-summary-card mb-4">
 
-        <div class="card-body">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
 
-            <div class="d-flex justify-content-between align-items-center">
+            <div>
 
-                <div>
-
-                    <h6 class="text-muted mb-1">
-                        Total Action Items
-                    </h6>
-
-                    <h2 class="mb-0">
-                        <?php echo $total_actions; ?>
-                    </h2>
-
+                <div class="action-summary-label">
+                    Total Action Items
                 </div>
 
-                <div>
-                    <span class="badge bg-warning text-dark fs-6">
+                <div class="action-summary-number">
+                    <?php echo $total_actions; ?>
+                </div>
+
+                <div class="small hm-muted mt-1">
+                    Combined items requiring attention.
+                </div>
+
+            </div>
+
+
+            <div class="mt-3 mt-md-0">
+
+                <?php if ($total_actions > 0): ?>
+
+                    <span class="badge bg-warning text-dark px-3 py-2">
                         Review Required
                     </span>
+
+                <?php else: ?>
+
+                    <span class="badge bg-success px-3 py-2">
+                        All Clear
+                    </span>
+
+                <?php endif; ?>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================================================
+         SUMMARY CARDS
+    ========================================================== -->
+
+    <div class="row g-3 mb-4">
+
+
+        <!-- OVERDUE FOLLOW-UPS -->
+
+        <div class="col-md-6 col-xl">
+
+            <div class="action-summary-card">
+
+                <div class="action-summary-label">
+                    Overdue Follow-ups
+                </div>
+
+                <div class="action-summary-number">
+                    <?php echo $overdue_followups_count; ?>
+                </div>
+
+                <div class="small text-danger mt-1">
+                    Immediate attention
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- UNASSIGNED LEADS -->
+
+        <div class="col-md-6 col-xl">
+
+            <div class="action-summary-card">
+
+                <div class="action-summary-label">
+                    Unassigned Leads
+                </div>
+
+                <div class="action-summary-number">
+                    <?php echo $unassigned_leads_count; ?>
+                </div>
+
+                <div class="small text-danger mt-1">
+                    Assignment required
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- OVERDUE TASKS -->
+
+        <div class="col-md-6 col-xl">
+
+            <div class="action-summary-card">
+
+                <div class="action-summary-label">
+                    Overdue Tasks
+                </div>
+
+                <div class="action-summary-number">
+                    <?php echo $overdue_tasks_count; ?>
+                </div>
+
+                <div class="small text-danger mt-1">
+                    Staff action required
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- PENDING APPOINTMENTS -->
+
+        <div class="col-md-6 col-xl">
+
+            <div class="action-summary-card">
+
+                <div class="action-summary-label">
+                    Pending Appointments
+                </div>
+
+                <div class="action-summary-number">
+                    <?php echo $pending_appointments_count; ?>
+                </div>
+
+                <div class="small hm-muted mt-1">
+                    Scheduled or confirmed
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- OVERDUE VISITS -->
+
+        <div class="col-md-6 col-xl">
+
+            <div class="action-summary-card">
+
+                <div class="action-summary-label">
+                    Overdue Visits
+                </div>
+
+                <div class="action-summary-number">
+                    <?php echo $overdue_visits_count; ?>
+                </div>
+
+                <div class="small text-danger mt-1">
+                    Visit follow-up required
                 </div>
 
             </div>
@@ -263,124 +548,43 @@ $total_actions =
     </div>
 
 
-    <!-- SUMMARY CARDS -->
+    <!-- =========================================================
+         OVERDUE FOLLOW-UPS
+    ========================================================== -->
 
-    <div class="row g-4 mb-4">
-
-
-        <div class="col-md-6 col-lg-3">
-
-            <div class="card shadow-sm border-0 h-100">
-
-                <div class="card-body">
-
-                    <h6 class="text-muted">
-                        Overdue Follow-ups
-                    </h6>
-
-                    <h3>
-                        <?php echo $overdue_followups_count; ?>
-                    </h3>
-
-                </div>
-
-            </div>
-
-        </div>
+    <div class="action-section mb-4">
 
 
-        <div class="col-md-6 col-lg-3">
+        <div class="action-section-header">
 
-            <div class="card shadow-sm border-0 h-100">
-
-                <div class="card-body">
-
-                    <h6 class="text-muted">
-                        Unassigned Leads
-                    </h6>
-
-                    <h3>
-                        <?php echo $unassigned_leads_count; ?>
-                    </h3>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <div class="col-md-6 col-lg-3">
-
-            <div class="card shadow-sm border-0 h-100">
-
-                <div class="card-body">
-
-                    <h6 class="text-muted">
-                        Overdue Tasks
-                    </h6>
-
-                    <h3>
-                        <?php echo $overdue_tasks_count; ?>
-                    </h3>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <div class="col-md-6 col-lg-3">
-
-            <div class="card shadow-sm border-0 h-100">
-
-                <div class="card-body">
-
-                    <h6 class="text-muted">
-                        Pending Appointments
-                    </h6>
-
-                    <h3>
-                        <?php echo $pending_appointments_count; ?>
-                    </h3>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-    </div>
-
-
-    <!-- OVERDUE FOLLOW-UPS -->
-
-    <div class="card shadow-sm border-0 mb-4">
-
-        <div class="card-header bg-white">
-
-            <h5 class="mb-0">
+            <h5 class="action-title mb-1">
                 Overdue Follow-ups
             </h5>
 
+            <div class="small hm-muted">
+                Leads where the scheduled next action has already passed.
+            </div>
+
         </div>
 
 
-        <div class="card-body p-0">
+        <div class="action-section-body">
 
             <?php if (empty($overdue_followups)): ?>
 
-                <div class="p-4 text-muted">
-                    No overdue follow-ups.
+                <div class="action-empty">
+
+                    <div class="alert alert-success mb-0">
+                        No overdue follow-ups.
+                    </div>
+
                 </div>
 
             <?php else: ?>
 
                 <div class="table-responsive">
 
-                    <table class="table table-hover mb-0">
+                    <table class="table action-table align-middle">
 
                         <thead>
 
@@ -403,6 +607,14 @@ $total_actions =
                                 </th>
 
                                 <th>
+                                    Status
+                                </th>
+
+                                <th>
+                                    Priority
+                                </th>
+
+                                <th>
                                     Assigned To
                                 </th>
 
@@ -417,59 +629,108 @@ $total_actions =
 
                         <tbody>
 
-                            <?php foreach (
-                                $overdue_followups
-                                as $lead
-                            ): ?>
+                            <?php foreach ($overdue_followups as $lead): ?>
 
                                 <tr>
 
                                     <td>
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $lead['name']
-                                        );
-                                        ?>
+
+                                        <strong>
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $lead['name']
+                                            );
+                                            ?>
+                                        </strong>
+
                                     </td>
 
+
                                     <td>
+
                                         <?php
                                         echo htmlspecialchars(
                                             $lead['phone']
                                         );
                                         ?>
+
                                     </td>
 
+
                                     <td>
+
                                         <?php
                                         echo htmlspecialchars(
-                                            $lead['next_action_type']
-                                            ?: '-'
-                                        );
-                                        ?>
-                                    </td>
-
-                                    <td>
-
-                                        <?php
-                                        echo date(
-                                            'd M Y, h:i A',
-                                            strtotime(
-                                                $lead['next_action_at']
-                                            )
+                                            $lead['next_action_type'] ?: '-'
                                         );
                                         ?>
 
                                     </td>
 
+
                                     <td>
+
+                                        <span class="text-danger fw-semibold">
+
+                                            <?php
+                                            echo date(
+                                                'd M Y, h:i A',
+                                                strtotime(
+                                                    $lead['next_action_at']
+                                                )
+                                            );
+                                            ?>
+
+                                        </span>
+
+                                    </td>
+
+
+                                    <td>
+
+                                        <span
+                                            class="badge <?php echo action_status_class($lead['status']); ?>"
+                                        >
+
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $lead['status']
+                                            );
+                                            ?>
+
+                                        </span>
+
+                                    </td>
+
+
+                                    <td>
+
+                                        <span
+                                            class="badge <?php echo action_priority_class($lead['priority']); ?>"
+                                        >
+
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $lead['priority']
+                                            );
+                                            ?>
+
+                                        </span>
+
+                                    </td>
+
+
+                                    <td>
+
                                         <?php
                                         echo htmlspecialchars(
                                             $lead['assigned_staff']
-                                            ?: 'Unassigned'
+                                                ?: 'Unassigned'
                                         );
                                         ?>
+
                                     </td>
+
 
                                     <td>
 
@@ -499,32 +760,43 @@ $total_actions =
     </div>
 
 
-    <!-- UNASSIGNED LEADS -->
+    <!-- =========================================================
+         UNASSIGNED LEADS
+    ========================================================== -->
 
-    <div class="card shadow-sm border-0 mb-4">
+    <div class="action-section mb-4">
 
-        <div class="card-header bg-white">
 
-            <h5 class="mb-0">
+        <div class="action-section-header">
+
+            <h5 class="action-title mb-1">
                 Unassigned Leads
             </h5>
+
+            <div class="small hm-muted">
+                Active leads that currently have no assigned staff member.
+            </div>
 
         </div>
 
 
-        <div class="card-body p-0">
+        <div class="action-section-body">
 
             <?php if (empty($unassigned_leads)): ?>
 
-                <div class="p-4 text-muted">
-                    No unassigned leads.
+                <div class="action-empty">
+
+                    <div class="alert alert-success mb-0">
+                        No unassigned leads.
+                    </div>
+
                 </div>
 
             <?php else: ?>
 
                 <div class="table-responsive">
 
-                    <table class="table table-hover mb-0">
+                    <table class="table action-table align-middle">
 
                         <thead>
 
@@ -536,6 +808,10 @@ $total_actions =
 
                                 <th>
                                     Phone
+                                </th>
+
+                                <th>
+                                    Service
                                 </th>
 
                                 <th>
@@ -561,44 +837,79 @@ $total_actions =
 
                         <tbody>
 
-                            <?php foreach (
-                                $unassigned_leads
-                                as $lead
-                            ): ?>
+                            <?php foreach ($unassigned_leads as $lead): ?>
 
                                 <tr>
 
                                     <td>
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $lead['name']
-                                        );
-                                        ?>
+
+                                        <strong>
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $lead['name']
+                                            );
+                                            ?>
+                                        </strong>
+
                                     </td>
 
+
                                     <td>
+
                                         <?php
                                         echo htmlspecialchars(
                                             $lead['phone']
                                         );
                                         ?>
+
                                     </td>
 
-                                    <td>
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $lead['status']
-                                        );
-                                        ?>
-                                    </td>
 
                                     <td>
+
                                         <?php
                                         echo htmlspecialchars(
-                                            $lead['priority']
+                                            $lead['service_interest']
+                                                ?: '-'
                                         );
                                         ?>
+
                                     </td>
+
+
+                                    <td>
+
+                                        <span
+                                            class="badge <?php echo action_status_class($lead['status']); ?>"
+                                        >
+
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $lead['status']
+                                            );
+                                            ?>
+
+                                        </span>
+
+                                    </td>
+
+
+                                    <td>
+
+                                        <span
+                                            class="badge <?php echo action_priority_class($lead['priority']); ?>"
+                                        >
+
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $lead['priority']
+                                            );
+                                            ?>
+
+                                        </span>
+
+                                    </td>
+
 
                                     <td>
 
@@ -612,6 +923,7 @@ $total_actions =
                                         ?>
 
                                     </td>
+
 
                                     <td>
 
@@ -641,32 +953,43 @@ $total_actions =
     </div>
 
 
-    <!-- OVERDUE TASKS -->
+    <!-- =========================================================
+         OVERDUE TASKS
+    ========================================================== -->
 
-    <div class="card shadow-sm border-0 mb-4">
+    <div class="action-section mb-4">
 
-        <div class="card-header bg-white">
 
-            <h5 class="mb-0">
+        <div class="action-section-header">
+
+            <h5 class="action-title mb-1">
                 Overdue Tasks
             </h5>
+
+            <div class="small hm-muted">
+                Tasks whose due date has passed without completion.
+            </div>
 
         </div>
 
 
-        <div class="card-body p-0">
+        <div class="action-section-body">
 
             <?php if (empty($overdue_tasks)): ?>
 
-                <div class="p-4 text-muted">
-                    No overdue tasks.
+                <div class="action-empty">
+
+                    <div class="alert alert-success mb-0">
+                        No overdue tasks.
+                    </div>
+
                 </div>
 
             <?php else: ?>
 
                 <div class="table-responsive">
 
-                    <table class="table table-hover mb-0">
+                    <table class="table action-table align-middle">
 
                         <thead>
 
@@ -703,64 +1026,90 @@ $total_actions =
 
                         <tbody>
 
-                            <?php foreach (
-                                $overdue_tasks
-                                as $task
-                            ): ?>
+                            <?php foreach ($overdue_tasks as $task): ?>
 
                                 <tr>
 
                                     <td>
+
+                                        <strong>
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $task['title']
+                                            );
+                                            ?>
+                                        </strong>
+
+                                    </td>
+
+
+                                    <td>
+
                                         <?php
                                         echo htmlspecialchars(
-                                            $task['title']
-                                        );
-                                        ?>
-                                    </td>
-
-                                    <td>
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $task['task_type']
-                                        );
-                                        ?>
-                                    </td>
-
-                                    <td>
-
-                                        <?php
-                                        echo date(
-                                            'd M Y, h:i A',
-                                            strtotime(
-                                                $task['due_date']
-                                            )
+                                            $task['task_type'] ?: '-'
                                         );
                                         ?>
 
                                     </td>
 
-                                    <td>
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $task['priority']
-                                        );
-                                        ?>
-                                    </td>
 
                                     <td>
+
+                                        <span class="text-danger fw-semibold">
+
+                                            <?php
+                                            echo date(
+                                                'd M Y, h:i A',
+                                                strtotime(
+                                                    $task['due_date']
+                                                )
+                                            );
+                                            ?>
+
+                                        </span>
+
+                                    </td>
+
+
+                                    <td>
+
+                                        <span
+                                            class="badge <?php echo action_priority_class($task['priority']); ?>"
+                                        >
+
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $task['priority']
+                                            );
+                                            ?>
+
+                                        </span>
+
+                                    </td>
+
+
+                                    <td>
+
                                         <?php
                                         echo htmlspecialchars(
                                             $task['assigned_staff']
                                         );
                                         ?>
+
                                     </td>
 
+
                                     <td>
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $task['status']
-                                        );
-                                        ?>
+
+                                        <span class="badge bg-danger">
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $task['status']
+                                            );
+                                            ?>
+                                        </span>
+
                                     </td>
 
                                 </tr>
@@ -780,32 +1129,43 @@ $total_actions =
     </div>
 
 
-    <!-- PENDING APPOINTMENTS -->
+    <!-- =========================================================
+         PENDING APPOINTMENTS
+    ========================================================== -->
 
-    <div class="card shadow-sm border-0 mb-4">
+    <div class="action-section mb-4">
 
-        <div class="card-header bg-white">
 
-            <h5 class="mb-0">
+        <div class="action-section-header">
+
+            <h5 class="action-title mb-1">
                 Pending Appointments Requiring Attention
             </h5>
+
+            <div class="small hm-muted">
+                Scheduled or confirmed appointments that have reached their appointment time.
+            </div>
 
         </div>
 
 
-        <div class="card-body p-0">
+        <div class="action-section-body">
 
             <?php if (empty($pending_appointments)): ?>
 
-                <div class="p-4 text-muted">
-                    No pending appointments requiring attention.
+                <div class="action-empty">
+
+                    <div class="alert alert-success mb-0">
+                        No pending appointments requiring attention.
+                    </div>
+
                 </div>
 
             <?php else: ?>
 
                 <div class="table-responsive">
 
-                    <table class="table table-hover mb-0">
+                    <table class="table action-table align-middle">
 
                         <thead>
 
@@ -831,6 +1191,10 @@ $total_actions =
                                     Status
                                 </th>
 
+                                <th>
+                                    Action
+                                </th>
+
                             </tr>
 
                         </thead>
@@ -838,28 +1202,33 @@ $total_actions =
 
                         <tbody>
 
-                            <?php foreach (
-                                $pending_appointments
-                                as $appointment
-                            ): ?>
+                            <?php foreach ($pending_appointments as $appointment): ?>
 
                                 <tr>
 
                                     <td>
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $appointment['lead_name']
-                                        );
-                                        ?>
+
+                                        <strong>
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $appointment['lead_name']
+                                            );
+                                            ?>
+                                        </strong>
+
                                     </td>
 
+
                                     <td>
+
                                         <?php
                                         echo htmlspecialchars(
                                             $appointment['lead_phone']
                                         );
                                         ?>
+
                                     </td>
+
 
                                     <td>
 
@@ -874,20 +1243,45 @@ $total_actions =
 
                                     </td>
 
+
                                     <td>
+
                                         <?php
                                         echo htmlspecialchars(
                                             $appointment['appointment_type']
+                                                ?: '-'
                                         );
                                         ?>
+
                                     </td>
 
+
                                     <td>
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $appointment['status']
-                                        );
-                                        ?>
+
+                                        <span
+                                            class="badge <?php echo action_status_class($appointment['status']); ?>"
+                                        >
+
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $appointment['status']
+                                            );
+                                            ?>
+
+                                        </span>
+
+                                    </td>
+
+
+                                    <td>
+
+                                        <a
+                                            href="<?php echo BASE_URL; ?>/telecaller/appointments/index.php"
+                                            class="btn btn-sm btn-outline-primary"
+                                        >
+                                            Open
+                                        </a>
+
                                     </td>
 
                                 </tr>
@@ -907,32 +1301,43 @@ $total_actions =
     </div>
 
 
-    <!-- OVERDUE VISITS -->
+    <!-- =========================================================
+         OVERDUE MARKETING VISITS
+    ========================================================== -->
 
-    <div class="card shadow-sm border-0 mb-4">
+    <div class="action-section mb-4">
 
-        <div class="card-header bg-white">
 
-            <h5 class="mb-0">
+        <div class="action-section-header">
+
+            <h5 class="action-title mb-1">
                 Overdue Marketing Visits
             </h5>
+
+            <div class="small hm-muted">
+                Planned field visits that have passed their scheduled date.
+            </div>
 
         </div>
 
 
-        <div class="card-body p-0">
+        <div class="action-section-body">
 
             <?php if (empty($overdue_visits)): ?>
 
-                <div class="p-4 text-muted">
-                    No overdue marketing visits.
+                <div class="action-empty">
+
+                    <div class="alert alert-success mb-0">
+                        No overdue marketing visits.
+                    </div>
+
                 </div>
 
             <?php else: ?>
 
                 <div class="table-responsive">
 
-                    <table class="table table-hover mb-0">
+                    <table class="table action-table align-middle">
 
                         <thead>
 
@@ -959,6 +1364,10 @@ $total_actions =
                                 </th>
 
                                 <th>
+                                    Status
+                                </th>
+
+                                <th>
                                     Action
                                 </th>
 
@@ -969,63 +1378,93 @@ $total_actions =
 
                         <tbody>
 
-                            <?php foreach (
-                                $overdue_visits
-                                as $visit
-                            ): ?>
+                            <?php foreach ($overdue_visits as $visit): ?>
 
                                 <tr>
 
                                     <td>
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $visit['title']
-                                        );
-                                        ?>
+
+                                        <strong>
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $visit['title']
+                                            );
+                                            ?>
+                                        </strong>
+
                                     </td>
 
-                                    <td>
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $visit['visit_type']
-                                        );
-                                        ?>
-                                    </td>
 
                                     <td>
 
                                         <?php
                                         echo htmlspecialchars(
-                                            $visit['person_name']
-                                                ?: $visit[
-                                                    'organization_name'
-                                                ]
-                                                ?: '-'
+                                            $visit['visit_type'] ?: '-'
                                         );
                                         ?>
 
                                     </td>
+
 
                                     <td>
 
                                         <?php
-                                        echo date(
-                                            'd M Y, h:i A',
-                                            strtotime(
-                                                $visit['visit_date']
-                                            )
+
+                                        $visit_person =
+                                            !empty($visit['person_name'])
+                                                ? $visit['person_name']
+                                                : $visit['organization_name'];
+
+                                        echo htmlspecialchars(
+                                            $visit_person ?: '-'
                                         );
+
                                         ?>
 
                                     </td>
 
+
                                     <td>
+
+                                        <span class="text-danger fw-semibold">
+
+                                            <?php
+                                            echo date(
+                                                'd M Y, h:i A',
+                                                strtotime(
+                                                    $visit['visit_date']
+                                                )
+                                            );
+                                            ?>
+
+                                        </span>
+
+                                    </td>
+
+
+                                    <td>
+
                                         <?php
                                         echo htmlspecialchars(
                                             $visit['assigned_staff']
                                         );
                                         ?>
+
                                     </td>
+
+
+                                    <td>
+
+                                        <span class="badge bg-primary">
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $visit['status']
+                                            );
+                                            ?>
+                                        </span>
+
+                                    </td>
+
 
                                     <td>
 
@@ -1058,4 +1497,8 @@ $total_actions =
 </div>
 
 
-<?php require_once __DIR__ . '/../includes/footer.php'; ?>
+<?php
+
+require_once __DIR__ . '/../includes/footer.php';
+
+?>

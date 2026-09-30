@@ -1,7 +1,8 @@
-<?php
+ <?php
 
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/role_check.php';
+require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../config/database.php';
 
 require_role('admin');
@@ -65,35 +66,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             try {
 
+                /*
+                |--------------------------------------------------------------------------
+                | Check Duplicate Department Name
+                |--------------------------------------------------------------------------
+                */
+
                 $stmt = $pdo->prepare("
-                    INSERT INTO departments (
-                        department_name,
-                        department_code,
-                        description,
-                        status
-                    )
-                    VALUES (?, ?, ?, ?)
+                    SELECT id
+                    FROM departments
+                    WHERE department_name = ?
+                    LIMIT 1
                 ");
 
                 $stmt->execute([
-                    $department_name,
-                    $department_code !== ''
-                        ? $department_code
-                        : null,
-                    $description !== ''
-                        ? $description
-                        : null,
-                    $status
+                    $department_name
                 ]);
 
-                $message =
-                    'Department added successfully.';
+                if ($stmt->fetch()) {
 
-                $message_type = 'success';
+                    $message =
+                        'Department name already exists.';
+                    $message_type = 'danger';
+
+                } else {
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Insert Department
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $stmt = $pdo->prepare("
+                        INSERT INTO departments (
+                            department_name,
+                            department_code,
+                            description,
+                            status
+                        )
+                        VALUES (?, ?, ?, ?)
+                    ");
+
+                    $stmt->execute([
+                        $department_name,
+                        $department_code !== ''
+                            ? $department_code
+                            : null,
+                        $description !== ''
+                            ? $description
+                            : null,
+                        $status
+                    ]);
+
+                    $message =
+                        'Department added successfully.';
+
+                    $message_type = 'success';
+                }
 
             } catch (PDOException $e) {
 
-                if ((int) $e->errorInfo[1] === 1062) {
+                /*
+                |--------------------------------------------------------------------------
+                | Duplicate Key Error
+                |--------------------------------------------------------------------------
+                */
+
+                if (
+                    isset($e->errorInfo[1]) &&
+                    (int) $e->errorInfo[1] === 1062
+                ) {
 
                     $message =
                         'Department name or code already exists.';
@@ -116,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     |--------------------------------------------------------------------------
     */
 
-    if ($action === 'edit') {
+    elseif ($action === 'edit') {
 
         $department_id = filter_input(
             INPUT_POST,
@@ -163,36 +205,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             try {
 
+                /*
+                |--------------------------------------------------------------------------
+                | Check Duplicate Name For Another Department
+                |--------------------------------------------------------------------------
+                */
+
                 $stmt = $pdo->prepare("
-                    UPDATE departments
-                    SET
-                        department_name = ?,
-                        department_code = ?,
-                        description = ?,
-                        status = ?
-                    WHERE id = ?
+                    SELECT id
+                    FROM departments
+                    WHERE department_name = ?
+                      AND id <> ?
+                    LIMIT 1
                 ");
 
                 $stmt->execute([
                     $department_name,
-                    $department_code !== ''
-                        ? $department_code
-                        : null,
-                    $description !== ''
-                        ? $description
-                        : null,
-                    $status,
                     $department_id
                 ]);
 
-                $message =
-                    'Department updated successfully.';
+                if ($stmt->fetch()) {
 
-                $message_type = 'success';
+                    $message =
+                        'Another department already uses this name.';
+
+                    $message_type = 'danger';
+
+                } else {
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Update Department
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $stmt = $pdo->prepare("
+                        UPDATE departments
+                        SET
+                            department_name = ?,
+                            department_code = ?,
+                            description = ?,
+                            status = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    ");
+
+                    $stmt->execute([
+                        $department_name,
+                        $department_code !== ''
+                            ? $department_code
+                            : null,
+                        $description !== ''
+                            ? $description
+                            : null,
+                        $status,
+                        $department_id
+                    ]);
+
+                    $message =
+                        'Department updated successfully.';
+
+                    $message_type = 'success';
+                }
 
             } catch (PDOException $e) {
 
-                if ((int) $e->errorInfo[1] === 1062) {
+                if (
+                    isset($e->errorInfo[1]) &&
+                    (int) $e->errorInfo[1] === 1062
+                ) {
 
                     $message =
                         'Department name or code already exists.';
@@ -215,7 +296,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     |--------------------------------------------------------------------------
     */
 
-    if ($action === 'delete') {
+    elseif ($action === 'delete') {
 
         $department_id = filter_input(
             INPUT_POST,
@@ -232,25 +313,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             try {
 
+                /*
+                |--------------------------------------------------------------------------
+                | Check Department Exists
+                |--------------------------------------------------------------------------
+                */
+
                 $stmt = $pdo->prepare("
-                    DELETE FROM departments
+                    SELECT id
+                    FROM departments
                     WHERE id = ?
+                    LIMIT 1
                 ");
 
                 $stmt->execute([
                     $department_id
                 ]);
 
-                $message =
-                    'Department deleted successfully.';
+                $department_exists = $stmt->fetch();
 
-                $message_type = 'success';
+                if (!$department_exists) {
+
+                    $message =
+                        'Department not found.';
+                    $message_type = 'danger';
+
+                } else {
+
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Delete Department
+                    |--------------------------------------------------------------------------
+                    */
+
+                    $stmt = $pdo->prepare("
+                        DELETE FROM departments
+                        WHERE id = ?
+                    ");
+
+                    $stmt->execute([
+                        $department_id
+                    ]);
+
+                    $message =
+                        'Department deleted successfully.';
+
+                    $message_type = 'success';
+                }
 
             } catch (PDOException $e) {
 
-                $message =
-                    'Unable to delete department: ' .
-                    $e->getMessage();
+                /*
+                |--------------------------------------------------------------------------
+                | Foreign Key Protection
+                |--------------------------------------------------------------------------
+                */
+
+                if (
+                    isset($e->errorInfo[1]) &&
+                    (int) $e->errorInfo[1] === 1451
+                ) {
+
+                    $message =
+                        'This department cannot be deleted because it is being used by other records. You can mark it Inactive instead.';
+
+                } else {
+
+                    $message =
+                        'Unable to delete department: ' .
+                        $e->getMessage();
+                }
 
                 $message_type = 'danger';
             }
@@ -314,21 +446,23 @@ $stmt = $pdo->query("
 
 $departments = $stmt->fetchAll();
 
+/*
+|--------------------------------------------------------------------------
+| Header
+|--------------------------------------------------------------------------
+*/
+
 require_once __DIR__ . '/../../includes/header.php';
 
 ?>
 
-<main class="container py-5">
+<main class="container py-4">
 
     <!-- PAGE HEADER -->
 
     <div class="mb-4">
 
-        <span class="badge text-bg-light">
-            ADMINISTRATOR
-        </span>
-
-        <h1 class="hm-page-title mt-2">
+        <h1 class="hm-page-title mt-1">
             Departments
         </h1>
 
@@ -337,6 +471,9 @@ require_once __DIR__ . '/../../includes/header.php';
         </p>
 
     </div>
+
+
+    <!-- MESSAGE -->
 
     <?php if ($message !== ''): ?>
 
@@ -367,23 +504,34 @@ require_once __DIR__ . '/../../includes/header.php';
 
                 </h5>
 
+
                 <form method="POST">
 
                     <input
                         type="hidden"
                         name="action"
-                        value="<?php echo $edit_department ? 'edit' : 'add'; ?>"
+                        value="<?php
+                        echo $edit_department
+                            ? 'edit'
+                            : 'add';
+                        ?>"
                     >
+
 
                     <?php if ($edit_department): ?>
 
                         <input
                             type="hidden"
                             name="department_id"
-                            value="<?php echo (int) $edit_department['id']; ?>"
+                            value="<?php
+                            echo (int) $edit_department['id'];
+                            ?>"
                         >
 
                     <?php endif; ?>
+
+
+                    <!-- DEPARTMENT NAME -->
 
                     <div class="mb-3">
 
@@ -397,8 +545,9 @@ require_once __DIR__ . '/../../includes/header.php';
                             class="form-control"
                             value="<?php
                             echo htmlspecialchars(
-                                $edit_department['department_name']
-                                ?? ''
+                                $edit_department[
+                                    'department_name'
+                                ] ?? ''
                             );
                             ?>"
                             placeholder="e.g. Cardiology"
@@ -406,6 +555,9 @@ require_once __DIR__ . '/../../includes/header.php';
                         >
 
                     </div>
+
+
+                    <!-- DEPARTMENT CODE -->
 
                     <div class="mb-3">
 
@@ -419,14 +571,18 @@ require_once __DIR__ . '/../../includes/header.php';
                             class="form-control"
                             value="<?php
                             echo htmlspecialchars(
-                                $edit_department['department_code']
-                                ?? ''
+                                $edit_department[
+                                    'department_code'
+                                ] ?? ''
                             );
                             ?>"
                             placeholder="e.g. CARD"
                         >
 
                     </div>
+
+
+                    <!-- DESCRIPTION -->
 
                     <div class="mb-3">
 
@@ -438,14 +594,19 @@ require_once __DIR__ . '/../../includes/header.php';
                             name="description"
                             class="form-control"
                             rows="4"
+                            placeholder="Department description"
                         ><?php
                         echo htmlspecialchars(
-                            $edit_department['description']
-                            ?? ''
+                            $edit_department[
+                                'description'
+                            ] ?? ''
                         );
                         ?></textarea>
 
                     </div>
+
+
+                    <!-- STATUS -->
 
                     <div class="mb-4">
 
@@ -462,7 +623,8 @@ require_once __DIR__ . '/../../includes/header.php';
                                 value="ACTIVE"
                                 <?php
                                 echo (
-                                    ($edit_department['status'] ?? 'ACTIVE')
+                                    ($edit_department['status']
+                                        ?? 'ACTIVE')
                                     === 'ACTIVE'
                                 )
                                     ? 'selected'
@@ -476,7 +638,8 @@ require_once __DIR__ . '/../../includes/header.php';
                                 value="INACTIVE"
                                 <?php
                                 echo (
-                                    ($edit_department['status'] ?? '')
+                                    ($edit_department['status']
+                                        ?? '')
                                     === 'INACTIVE'
                                 )
                                     ? 'selected'
@@ -489,6 +652,9 @@ require_once __DIR__ . '/../../includes/header.php';
                         </select>
 
                     </div>
+
+
+                    <!-- BUTTONS -->
 
                     <div class="d-flex gap-2">
 
@@ -505,10 +671,13 @@ require_once __DIR__ . '/../../includes/header.php';
 
                         </button>
 
+
                         <?php if ($edit_department): ?>
 
                             <a
-                                href="<?php echo BASE_URL; ?>/admin/departments/"
+                                href="<?php
+                                echo BASE_URL;
+                                ?>/admin/departments/"
                                 class="btn btn-outline-secondary"
                             >
                                 Cancel
@@ -540,16 +709,22 @@ require_once __DIR__ . '/../../includes/header.php';
                     </h5>
 
                     <span class="badge text-bg-light">
-                        <?php echo count($departments); ?>
+
+                        <?php
+                        echo count($departments);
+                        ?>
+
                         Departments
+
                     </span>
 
                 </div>
 
+
                 <div class="table-responsive">
 
                     <table
-                        class="table table-bordered align-middle"
+                        class="table table-bordered table-hover align-middle mb-0"
                     >
 
                         <thead>
@@ -580,6 +755,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
                         </thead>
 
+
                         <tbody>
 
                         <?php if (!empty($departments)): ?>
@@ -590,6 +766,8 @@ require_once __DIR__ . '/../../includes/header.php';
                             ): ?>
 
                                 <tr>
+
+                                    <!-- DEPARTMENT -->
 
                                     <td>
 
@@ -603,6 +781,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                             ?>
                                         </strong>
 
+
                                         <?php
                                         if (
                                             !empty(
@@ -613,7 +792,8 @@ require_once __DIR__ . '/../../includes/header.php';
                                         ):
                                         ?>
 
-                                            <div class="small text-muted">
+                                            <div class="small text-muted mt-1">
+
                                                 <?php
                                                 echo htmlspecialchars(
                                                     $department[
@@ -621,11 +801,15 @@ require_once __DIR__ . '/../../includes/header.php';
                                                     ]
                                                 );
                                                 ?>
+
                                             </div>
 
                                         <?php endif; ?>
 
                                     </td>
+
+
+                                    <!-- CODE -->
 
                                     <td>
 
@@ -639,20 +823,29 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                     </td>
 
+
+                                    <!-- STATUS -->
+
                                     <td>
 
-                                        <?php if (
+                                        <?php
+                                        if (
                                             $department['status']
                                             === 'ACTIVE'
-                                        ): ?>
+                                        ):
+                                        ?>
 
-                                            <span class="badge text-bg-success">
+                                            <span
+                                                class="badge text-bg-success"
+                                            >
                                                 Active
                                             </span>
 
                                         <?php else: ?>
 
-                                            <span class="badge text-bg-secondary">
+                                            <span
+                                                class="badge text-bg-secondary"
+                                            >
                                                 Inactive
                                             </span>
 
@@ -660,33 +853,54 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                     </td>
 
+
+                                    <!-- CREATED -->
+
                                     <td>
 
                                         <?php
-                                        echo htmlspecialchars(
-                                            date(
-                                                'd M Y',
-                                                strtotime(
-                                                    $department[
-                                                        'created_at'
-                                                    ]
+
+                                        $created_at =
+                                            $department[
+                                                'created_at'
+                                            ] ?? null;
+
+                                        echo $created_at
+                                            ? htmlspecialchars(
+                                                date(
+                                                    'd M Y',
+                                                    strtotime(
+                                                        $created_at
+                                                    )
                                                 )
                                             )
-                                        );
+                                            : '-';
+
                                         ?>
 
                                     </td>
 
+
+                                    <!-- ACTION -->
+
                                     <td>
 
-                                        <div class="d-flex gap-1">
+                                        <div
+                                            class="d-flex gap-1"
+                                        >
 
                                             <a
-                                                href="<?php echo BASE_URL; ?>/admin/departments/?edit=<?php echo (int) $department['id']; ?>"
+                                                href="<?php
+                                                echo BASE_URL;
+                                                ?>/admin/departments/?edit=<?php
+                                                echo (int)
+                                                    $department['id'];
+                                                ?>"
                                                 class="btn btn-sm btn-outline-primary"
                                             >
                                                 Edit
                                             </a>
+
 
                                             <form
                                                 method="POST"
@@ -702,7 +916,10 @@ require_once __DIR__ . '/../../includes/header.php';
                                                 <input
                                                     type="hidden"
                                                     name="department_id"
-                                                    value="<?php echo (int) $department['id']; ?>"
+                                                    value="<?php
+                                                    echo (int)
+                                                        $department['id'];
+                                                    ?>"
                                                 >
 
                                                 <button
@@ -750,6 +967,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 
 </main>
+
 
 <?php
 

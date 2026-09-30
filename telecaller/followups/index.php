@@ -8,9 +8,9 @@ require_role('telecaller');
 $user = current_user();
 
 /*
-|--------------------------------------------------------------------------
+
 | Overdue Follow-ups
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -38,9 +38,9 @@ $overdue_followups = $stmt->fetchAll();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Today's Follow-ups
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -68,9 +68,9 @@ $today_followups = $stmt->fetchAll();
 
 
 /*
-|--------------------------------------------------------------------------
+
 | Upcoming Follow-ups
-|--------------------------------------------------------------------------
+
 */
 
 $stmt = $pdo->prepare("
@@ -113,9 +113,9 @@ require_once __DIR__ . '/../../includes/header.php';
 
         <div>
 
-            <h2 class="hm-page-title mb-1">
+            <h1 class="hm-page-title mb-1">
                 Follow-ups
-            </h2>
+            </h1>
 
             <p class="hm-muted mb-0">
                 Manage your overdue, today's and upcoming follow-ups.

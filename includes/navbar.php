@@ -567,6 +567,15 @@ $user = current_user();
                             </a>
                         </li>
 
+                        <li class="nav-item">
+    <a
+        class="nav-link text-white"
+        href="<?php echo BASE_URL; ?>/marketing/events/"
+    >
+        Events
+    </a>
+</li>
+
 
                         <li class="nav-item">
     <a

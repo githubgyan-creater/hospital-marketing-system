@@ -4,9 +4,9 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/../config/database.php';
 
 /*
-|--------------------------------------------------------------------------
+
 | Require Specific Role
-|--------------------------------------------------------------------------
+
 */
 
 function require_role(string ...$allowed_roles): void
@@ -25,9 +25,9 @@ function require_role(string ...$allowed_roles): void
     global $pdo;
 
     /*
-    |--------------------------------------------------------------------------
+    
     | Get Current User Role
-    |--------------------------------------------------------------------------
+    
     */
 
     $stmt = $pdo->prepare("
@@ -55,9 +55,9 @@ function require_role(string ...$allowed_roles): void
     }
 
     /*
-    |--------------------------------------------------------------------------
+    
     | Normalize Database Role
-    |--------------------------------------------------------------------------
+    
     */
 
     $current_role = normalize_role_name(
@@ -65,9 +65,9 @@ function require_role(string ...$allowed_roles): void
     );
 
     /*
-    |--------------------------------------------------------------------------
+    
     | Normalize Allowed Roles
-    |--------------------------------------------------------------------------
+    
     */
 
     $normalized_allowed_roles = [];
@@ -79,9 +79,9 @@ function require_role(string ...$allowed_roles): void
     }
 
     /*
-    |--------------------------------------------------------------------------
+    
     | Check Permission
-    |--------------------------------------------------------------------------
+    
     */
 
     if (
@@ -98,9 +98,9 @@ function require_role(string ...$allowed_roles): void
     }
 
     /*
-    |--------------------------------------------------------------------------
+    
     | Keep Session Role Consistent
-    |--------------------------------------------------------------------------
+    
     */
 
     $_SESSION['user']['role'] = $current_role;

@@ -1,7 +1,9 @@
-<?php
+ <?php
 
-require_once __DIR__ . '/../../includes/role_check.php';
+require_once __DIR__ . '/../../config/config.php';
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/role_check.php';
 
 require_role('admin');
 
@@ -11,10 +13,10 @@ $user = current_user();
 |--------------------------------------------------------------------------
 | Fetch Roles
 |--------------------------------------------------------------------------
-|
 | Count how many permissions are assigned to each role.
-|
+|--------------------------------------------------------------------------
 */
+
 $stmt = $pdo->query("
     SELECT
         r.id,
@@ -33,10 +35,12 @@ $stmt = $pdo->query("
     ORDER BY r.id ASC
 ");
 
-$roles = $stmt->fetchAll();
+$roles = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 ?>
+
 <!DOCTYPE html>
+
 <html lang="en">
 
 <head>
@@ -53,6 +57,11 @@ $roles = $stmt->fetchAll();
     <link
         href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
         rel="stylesheet"
+    >
+
+    <link
+        rel="stylesheet"
+        href="<?= BASE_URL; ?>/assets/css/style.css"
     >
 
     <style>
@@ -109,38 +118,56 @@ $roles = $stmt->fetchAll();
             border-color: #12283e;
         }
 
+        .role-description {
+            color: #71808c;
+            font-size: 14px;
+        }
+
     </style>
-    
-    <link
-    rel="stylesheet"
-    href="<?php echo BASE_URL; ?>/assets/css/style.css"
->
 
 </head>
 
 <body>
 
- <?php
+<?php
+
 require_once __DIR__ . '/../../includes/navbar.php';
+
 ?>
+
 
 <div class="container py-4">
 
-    <div class="mb-4">
 
-        <h2 class="page-title mb-1">
-            Roles & Permissions
-        </h2>
+    <!-- =====================================================
+         PAGE HEADER
+    ====================================================== -->
 
-        <p class="text-muted mb-0">
-            Manage role-based access for the hospital marketing team.
-        </p>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+
+        <div>
+
+            <h1 class="page-title mb-1">
+                Roles & Permissions
+            </h1>
+
+            <p class="text-muted mb-0">
+                Manage role-based access for the hospital marketing team.
+            </p>
+
+        </div>
 
     </div>
+
+
+    <!-- =====================================================
+         ROLES TABLE
+    ====================================================== -->
 
     <div class="card page-card">
 
         <div class="card-body">
+
 
             <div class="table-responsive">
 
@@ -149,58 +176,93 @@ require_once __DIR__ . '/../../includes/navbar.php';
                     <thead>
 
                         <tr>
-                            <th width="80">ID</th>
-                            <th>Role</th>
-                            <th>Display Name</th>
-                            <th>Permissions</th>
-                            <th>Created On</th>
-                            <th width="130">Action</th>
+
+                            <th width="80">
+                                ID
+                            </th>
+
+                            <th>
+                                Role
+                            </th>
+
+                            <th>
+                                Display Name
+                            </th>
+
+                            <th>
+                                Permissions
+                            </th>
+
+                            <th>
+                                Created On
+                            </th>
+
+                            <th width="130">
+                                Action
+                            </th>
+
                         </tr>
 
                     </thead>
 
+
                     <tbody>
 
+
                     <?php if (!empty($roles)): ?>
+
 
                         <?php foreach ($roles as $role): ?>
 
                             <tr>
 
+
+                                <!-- ID -->
+
                                 <td>
-                                    <?php echo (int) $role['id']; ?>
+
+                                    <?= (int) $role['id']; ?>
+
                                 </td>
+
+
+                                <!-- Role Code -->
 
                                 <td>
 
                                     <span class="badge role-badge">
 
-                                        <?php
-                                        echo htmlspecialchars(
+                                        <?= htmlspecialchars(
                                             $role['name']
-                                        );
-                                        ?>
+                                        ); ?>
 
                                     </span>
 
                                 </td>
 
+
+                                <!-- Display Name -->
+
                                 <td>
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $role['display_name']
-                                    );
-                                    ?>
+
+                                    <div class="fw-semibold">
+
+                                        <?= htmlspecialchars(
+                                            $role['display_name']
+                                        ); ?>
+
+                                    </div>
+
                                 </td>
+
+
+                                <!-- Permission Count -->
 
                                 <td>
 
                                     <span class="badge permission-count">
 
-                                        <?php
-                                        echo (int)
-                                            $role['permission_count'];
-                                        ?>
+                                        <?= (int) $role['permission_count']; ?>
 
                                         permissions
 
@@ -208,25 +270,41 @@ require_once __DIR__ . '/../../includes/navbar.php';
 
                                 </td>
 
+
+                                <!-- Created Date -->
+
                                 <td>
 
                                     <?php
-                                    echo htmlspecialchars(
-                                        date(
-                                            'd M Y',
-                                            strtotime(
-                                                $role['created_at']
+
+                                    $created_at = $role['created_at'];
+
+                                    if (!empty($created_at)) {
+
+                                        echo htmlspecialchars(
+                                            date(
+                                                'd M Y',
+                                                strtotime($created_at)
                                             )
-                                        )
-                                    );
+                                        );
+
+                                    } else {
+
+                                        echo '-';
+
+                                    }
+
                                     ?>
 
                                 </td>
 
+
+                                <!-- Action -->
+
                                 <td>
 
                                     <a
-                                        href="<?php echo BASE_URL; ?>/admin/roles/edit.php?id=<?php echo (int) $role['id']; ?>"
+                                        href="<?= BASE_URL; ?>/admin/roles/edit.php?id=<?= (int) $role['id']; ?>"
                                         class="btn btn-sm btn-primary"
                                     >
                                         Manage
@@ -234,11 +312,14 @@ require_once __DIR__ . '/../../includes/navbar.php';
 
                                 </td>
 
+
                             </tr>
 
                         <?php endforeach; ?>
 
+
                     <?php else: ?>
+
 
                         <tr>
 
@@ -246,12 +327,16 @@ require_once __DIR__ . '/../../includes/navbar.php';
                                 colspan="6"
                                 class="text-center text-muted py-4"
                             >
+
                                 No roles found.
+
                             </td>
 
                         </tr>
 
+
                     <?php endif; ?>
+
 
                     </tbody>
 
@@ -259,11 +344,14 @@ require_once __DIR__ . '/../../includes/navbar.php';
 
             </div>
 
+
         </div>
 
     </div>
 
+
 </div>
+
 
 <script
     src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"

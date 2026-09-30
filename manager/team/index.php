@@ -1,4 +1,4 @@
-<?php
+ <?php
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/role_check.php';
@@ -7,31 +7,19 @@ require_role('manager');
 
 $user = current_user();
 
-
 /*
 |--------------------------------------------------------------------------
-| Search
+| Search & Filters
 |--------------------------------------------------------------------------
 */
-
 $search = trim($_GET['search'] ?? '');
-
-
-/*
-|--------------------------------------------------------------------------
-| Role Filter
-|--------------------------------------------------------------------------
-*/
-
 $role_filter = trim($_GET['role'] ?? '');
 
-
 /*
 |--------------------------------------------------------------------------
-| Build Query
+| Team Members Query
 |--------------------------------------------------------------------------
 */
-
 $sql = "
     SELECT
         u.id,
@@ -50,15 +38,12 @@ $sql = "
 
 $params = [];
 
-
 /*
 |--------------------------------------------------------------------------
-| Search Filter
+| Search
 |--------------------------------------------------------------------------
 */
-
 if ($search !== '') {
-
     $sql .= "
         AND (
             u.name LIKE ?
@@ -66,56 +51,37 @@ if ($search !== '') {
         )
     ";
 
-    $params[] = '%' . $search . '%';
-    $params[] = '%' . $search . '%';
-}
+    $search_term = '%' . $search . '%';
 
+    $params[] = $search_term;
+    $params[] = $search_term;
+}
 
 /*
 |--------------------------------------------------------------------------
 | Role Filter
 |--------------------------------------------------------------------------
 */
-
 if (
     $role_filter !== '' &&
-    in_array(
-        $role_filter,
-        ['telecaller', 'marketing'],
-        true
-    )
+    in_array($role_filter, ['telecaller', 'marketing'], true)
 ) {
-
     $sql .= " AND r.name = ? ";
-
     $params[] = $role_filter;
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| Order
-|--------------------------------------------------------------------------
-*/
-
-$sql .= "
-    ORDER BY u.name ASC
-";
-
+$sql .= " ORDER BY u.name ASC ";
 
 $stmt = $pdo->prepare($sql);
-
 $stmt->execute($params);
 
-$team_members = $stmt->fetchAll();
-
+$team_members = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 /*
 |--------------------------------------------------------------------------
-| Team Counts
+| Team Summary Counts
 |--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->query("
     SELECT
         r.name AS role_name,
@@ -130,48 +96,122 @@ $stmt = $pdo->query("
 
 $role_counts = [];
 
-foreach ($stmt->fetchAll() as $row) {
-
-    $role_counts[$row['role_name']] =
-        (int) $row['total'];
+foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $role_counts[$row['role_name']] = (int) $row['total'];
 }
 
+$telecaller_count = $role_counts['telecaller'] ?? 0;
+$marketing_count = $role_counts['marketing'] ?? 0;
 
-$telecaller_count =
-    $role_counts['telecaller'] ?? 0;
+$total_team = $telecaller_count + $marketing_count;
 
-$marketing_count =
-    $role_counts['marketing'] ?? 0;
+/*
+|--------------------------------------------------------------------------
+| Team Workload Statistics
+|--------------------------------------------------------------------------
+*/
+$team_stats = [];
 
-$total_team =
-    $telecaller_count +
-    $marketing_count;
+foreach ($team_members as $member) {
 
+    $member_id = (int) $member['id'];
 
+    /*
+    |--------------------------------------------------------------------------
+    | Assigned Leads
+    |--------------------------------------------------------------------------
+    */
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM leads
+        WHERE assigned_to = ?
+    ");
+
+    $stmt->execute([$member_id]);
+
+    $assigned_leads = (int) $stmt->fetchColumn();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Overdue Follow-ups
+    |--------------------------------------------------------------------------
+    */
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM leads
+        WHERE assigned_to = ?
+          AND next_action_at IS NOT NULL
+          AND next_action_at < NOW()
+          AND status NOT IN ('Converted', 'Lost')
+    ");
+
+    $stmt->execute([$member_id]);
+
+    $overdue_followups = (int) $stmt->fetchColumn();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Assigned Tasks
+    |--------------------------------------------------------------------------
+    */
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM tasks
+        WHERE assigned_to = ?
+          AND status NOT IN ('Completed', 'Cancelled')
+    ");
+
+    $stmt->execute([$member_id]);
+
+    $active_tasks = (int) $stmt->fetchColumn();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Activities
+    |--------------------------------------------------------------------------
+    */
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM lead_activities
+        WHERE user_id = ?
+    ");
+
+    $stmt->execute([$member_id]);
+
+    $activities = (int) $stmt->fetchColumn();
+
+    $team_stats[$member_id] = [
+        'assigned_leads' => $assigned_leads,
+        'overdue_followups' => $overdue_followups,
+        'active_tasks' => $active_tasks,
+        'activities' => $activities
+    ];
+}
+
+/*
+|--------------------------------------------------------------------------
+| Page
+|--------------------------------------------------------------------------
+*/
 $page_title = 'Marketing Team';
 
 require_once __DIR__ . '/../../includes/header.php';
 
 ?>
 
-
 <div class="container py-4">
 
-
     <!-- Page Header -->
-
     <div class="d-flex justify-content-between align-items-center mb-4">
 
         <div>
-
-            <h2 class="hm-page-title mb-1">
+            <h1 class="hm-page-title mb-1">
                 Marketing Team
-            </h2>
+            </h1>
 
             <p class="hm-muted mb-0">
                 Monitor your active Telecaller and Marketing Executive team.
             </p>
-
         </div>
 
         <a
@@ -185,14 +225,10 @@ require_once __DIR__ . '/../../includes/header.php';
 
 
     <!-- Team Summary -->
-
     <div class="row g-3 mb-4">
 
-
         <!-- Total Team -->
-
         <div class="col-md-4">
-
             <div class="hm-card p-4 h-100">
 
                 <div class="hm-muted">
@@ -204,14 +240,11 @@ require_once __DIR__ . '/../../includes/header.php';
                 </h2>
 
             </div>
-
         </div>
 
 
         <!-- Telecallers -->
-
         <div class="col-md-4">
-
             <div class="hm-card p-4 h-100">
 
                 <div class="hm-muted">
@@ -223,14 +256,11 @@ require_once __DIR__ . '/../../includes/header.php';
                 </h2>
 
             </div>
-
         </div>
 
 
         <!-- Marketing -->
-
         <div class="col-md-4">
-
             <div class="hm-card p-4 h-100">
 
                 <div class="hm-muted">
@@ -242,21 +272,19 @@ require_once __DIR__ . '/../../includes/header.php';
                 </h2>
 
             </div>
-
         </div>
 
     </div>
 
 
-    <!-- Search -->
-
+    <!-- Search & Filter -->
     <div class="hm-card p-4 mb-4">
 
         <form method="GET">
 
             <div class="row g-3 align-items-end">
 
-
+                <!-- Search -->
                 <div class="col-md-6">
 
                     <label
@@ -278,6 +306,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 </div>
 
 
+                <!-- Role -->
                 <div class="col-md-3">
 
                     <label
@@ -324,6 +353,7 @@ require_once __DIR__ . '/../../includes/header.php';
                 </div>
 
 
+                <!-- Buttons -->
                 <div class="col-md-3 d-flex gap-2">
 
                     <button
@@ -349,8 +379,7 @@ require_once __DIR__ . '/../../includes/header.php';
     </div>
 
 
-    <!-- Team Table -->
-
+    <!-- Team Members -->
     <div class="hm-card p-4">
 
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -369,13 +398,10 @@ require_once __DIR__ . '/../../includes/header.php';
         <?php if (empty($team_members)): ?>
 
             <div class="alert alert-light mb-0">
-
                 No active team members found.
-
             </div>
 
         <?php else: ?>
-
 
             <div class="table-responsive">
 
@@ -386,15 +412,27 @@ require_once __DIR__ . '/../../includes/header.php';
                         <tr>
 
                             <th>
-                                Name
-                            </th>
-
-                            <th>
-                                Email
+                                Team Member
                             </th>
 
                             <th>
                                 Role
+                            </th>
+
+                            <th>
+                                Leads
+                            </th>
+
+                            <th>
+                                Overdue
+                            </th>
+
+                            <th>
+                                Tasks
+                            </th>
+
+                            <th>
+                                Activities
                             </th>
 
                             <th>
@@ -416,35 +454,46 @@ require_once __DIR__ . '/../../includes/header.php';
 
                     <tbody>
 
-
                         <?php foreach ($team_members as $member): ?>
+
+                            <?php
+                            $member_id = (int) $member['id'];
+
+                            $stats = $team_stats[$member_id] ?? [
+                                'assigned_leads' => 0,
+                                'overdue_followups' => 0,
+                                'active_tasks' => 0,
+                                'activities' => 0
+                            ];
+                            ?>
 
                             <tr>
 
+                                <!-- Team Member -->
                                 <td>
 
-                                    <strong>
+                                    <div>
+                                        <strong>
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $member['name']
+                                            );
+                                            ?>
+                                        </strong>
+                                    </div>
+
+                                    <small class="text-muted">
                                         <?php
                                         echo htmlspecialchars(
-                                            $member['name']
+                                            $member['email']
                                         );
                                         ?>
-                                    </strong>
+                                    </small>
 
                                 </td>
 
 
-                                <td>
-
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $member['email']
-                                    );
-                                    ?>
-
-                                </td>
-
-
+                                <!-- Role -->
                                 <td>
 
                                     <span class="badge bg-secondary">
@@ -460,6 +509,63 @@ require_once __DIR__ . '/../../includes/header.php';
                                 </td>
 
 
+                                <!-- Leads -->
+                                <td>
+
+                                    <strong>
+                                        <?php
+                                        echo $stats['assigned_leads'];
+                                        ?>
+                                    </strong>
+
+                                </td>
+
+
+                                <!-- Overdue Follow-ups -->
+                                <td>
+
+                                    <?php if ($stats['overdue_followups'] > 0): ?>
+
+                                        <span class="badge bg-danger">
+                                            <?php
+                                            echo $stats['overdue_followups'];
+                                            ?>
+                                        </span>
+
+                                    <?php else: ?>
+
+                                        <span class="badge bg-success">
+                                            0
+                                        </span>
+
+                                    <?php endif; ?>
+
+                                </td>
+
+
+                                <!-- Tasks -->
+                                <td>
+
+                                    <span class="badge bg-light text-dark border">
+                                        <?php
+                                        echo $stats['active_tasks'];
+                                        ?>
+                                    </span>
+
+                                </td>
+
+
+                                <!-- Activities -->
+                                <td>
+
+                                    <?php
+                                    echo $stats['activities'];
+                                    ?>
+
+                                </td>
+
+
+                                <!-- Joined -->
                                 <td>
 
                                     <?php
@@ -474,6 +580,7 @@ require_once __DIR__ . '/../../includes/header.php';
                                 </td>
 
 
+                                <!-- Status -->
                                 <td>
 
                                     <span class="badge bg-success">
@@ -483,10 +590,11 @@ require_once __DIR__ . '/../../includes/header.php';
                                 </td>
 
 
+                                <!-- Action -->
                                 <td>
 
                                     <a
-                                        href="<?php echo BASE_URL; ?>/manager/team/profile.php?id=<?php echo (int) $member['id']; ?>"
+                                        href="<?php echo BASE_URL; ?>/manager/team/profile.php?id=<?php echo $member_id; ?>"
                                         class="btn btn-sm btn-outline-primary"
                                     >
                                         View Profile
@@ -498,13 +606,11 @@ require_once __DIR__ . '/../../includes/header.php';
 
                         <?php endforeach; ?>
 
-
                     </tbody>
 
                 </table>
 
             </div>
-
 
         <?php endif; ?>
 

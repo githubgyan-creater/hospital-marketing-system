@@ -1,4 +1,4 @@
-:root {
+ :root {
     --hm-navy: #17324d;
     --hm-teal: #168a87;
     --hm-gold: #b89a5a;
@@ -13,6 +13,8 @@ body {
     background-color: var(--hm-ivory);
     color: var(--hm-text);
     font-family: Arial, sans-serif;
+    margin: 0;
+    overflow-x: hidden;
 }
 
 .hm-navbar {
@@ -30,6 +32,8 @@ body {
     border: 1px solid var(--hm-border);
     border-radius: 16px;
     box-shadow: 0 6px 20px rgba(23, 50, 77, 0.07);
+    max-width: 100%;
+    min-width: 0;
 }
 
 .btn-hm-primary {
@@ -55,4 +59,27 @@ body {
 
 .hm-muted {
     color: var(--hm-muted);
+}
+
+
+/* =========================================================
+   GLOBAL LAYOUT STABILITY
+   Prevent horizontal page movement
+   ========================================================= */
+
+html {
+    scrollbar-gutter: stable;
+}
+
+.row {
+    max-width: 100%;
+}
+
+.table-responsive {
+    width: 100%;
+    max-width: 100%;
+}
+
+.table-responsive table {
+    max-width: 100%;
 }
