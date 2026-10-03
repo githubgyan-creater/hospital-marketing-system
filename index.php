@@ -15,9 +15,9 @@ require_once __DIR__ . '/includes/header.php';
 
         <div class="mb-3">
 
-            <span class="badge text-bg-light">
+            <!-- <span class="badge text-bg-light">
                 Hospital Marketing System
-            </span>
+            </span> -->
 
         </div>
 

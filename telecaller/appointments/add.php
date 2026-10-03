@@ -1,42 +1,78 @@
-<?php
+ <?php
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/role_check.php';
 
-require_role('telecaller');
+/*
+|--------------------------------------------------------------------------
+| Appointment Creation Access
+|--------------------------------------------------------------------------
+| Allowed roles:
+| - Manager
+| - Telecaller
+| - Marketing Executive
+*/
+require_role('manager', 'telecaller', 'marketing');
 
 $user = current_user();
+$role = $user['role'] ?? '';
+$user_id = (int) ($user['id'] ?? 0);
 
 $lead_id = isset($_GET['lead_id'])
     ? (int) $_GET['lead_id']
     : 0;
 
 if ($lead_id <= 0) {
+    http_response_code(400);
     exit('Invalid lead.');
 }
 
 /*
-
-| Get Assigned Lead
-
+|--------------------------------------------------------------------------
+| Get Lead
+|--------------------------------------------------------------------------
+| Manager:
+|   Can create appointment for any lead.
+|
+| Telecaller / Marketing Executive:
+|   Can create appointment only for leads assigned to them.
 */
+if ($role === 'manager') {
 
-$stmt = $pdo->prepare("
-    SELECT
-        l.*,
-        ms.name AS source_name
-    FROM leads l
-    LEFT JOIN marketing_sources ms
-        ON l.source_id = ms.id
-    WHERE l.id = ?
-      AND l.assigned_to = ?
-    LIMIT 1
-");
+    $stmt = $pdo->prepare("
+        SELECT
+            l.*,
+            ms.name AS source_name
+        FROM leads l
+        LEFT JOIN marketing_sources ms
+            ON l.source_id = ms.id
+        WHERE l.id = ?
+        LIMIT 1
+    ");
 
-$stmt->execute([
-    $lead_id,
-    $user['id']
-]);
+    $stmt->execute([
+        $lead_id
+    ]);
+
+} else {
+
+    $stmt = $pdo->prepare("
+        SELECT
+            l.*,
+            ms.name AS source_name
+        FROM leads l
+        LEFT JOIN marketing_sources ms
+            ON l.source_id = ms.id
+        WHERE l.id = ?
+          AND l.assigned_to = ?
+        LIMIT 1
+    ");
+
+    $stmt->execute([
+        $lead_id,
+        $user_id
+    ]);
+}
 
 $lead = $stmt->fetch();
 
@@ -45,13 +81,11 @@ if (!$lead) {
     exit('Lead not found or not assigned to you.');
 }
 
-
 /*
-
+|--------------------------------------------------------------------------
 | Form Processing
-
+|--------------------------------------------------------------------------
 */
-
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -68,6 +102,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_POST['notes'] ?? ''
     );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Appointment Date
+    |--------------------------------------------------------------------------
+    */
     if ($appointment_date === '') {
 
         $error = 'Please select appointment date and time.';
@@ -86,22 +125,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         } else {
 
-            $appointment_datetime =
-                date(
-                    'Y-m-d H:i:s',
-                    $timestamp
-                );
+            $appointment_datetime = date(
+                'Y-m-d H:i:s',
+                $timestamp
+            );
 
             try {
 
                 $pdo->beginTransaction();
 
                 /*
-                
+                |--------------------------------------------------------------------------
                 | Create Appointment
-                
+                |--------------------------------------------------------------------------
                 */
-
                 $stmt = $pdo->prepare("
                     INSERT INTO appointments (
                         lead_id,
@@ -116,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $stmt->execute([
                     $lead_id,
-                    $user['id'],
+                    $user_id,
                     $appointment_datetime,
                     $appointment_type !== ''
                         ? $appointment_type
@@ -127,11 +164,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
 
                 /*
-                
+                |--------------------------------------------------------------------------
                 | Update Lead Status
-                
+                |--------------------------------------------------------------------------
                 */
-
                 $stmt = $pdo->prepare("
                     UPDATE leads
                     SET status = 'Appointment Requested'
@@ -143,11 +179,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
 
                 /*
-                
+                |--------------------------------------------------------------------------
                 | Add Activity
-                
+                |--------------------------------------------------------------------------
                 */
-
                 $description =
                     'Appointment created for ' .
                     date(
@@ -182,18 +217,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $stmt->execute([
                     $lead_id,
-                    $user['id'],
+                    $user_id,
                     $description
                 ]);
 
                 $pdo->commit();
 
                 /*
-                
-                | Redirect
-                
+                |--------------------------------------------------------------------------
+                | Redirect Back To Lead
+                |--------------------------------------------------------------------------
                 */
-
                 header(
                     'Location: ' .
                     BASE_URL .
@@ -216,7 +250,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-
 $page_title = 'Create Appointment';
 
 require_once __DIR__ . '/../../includes/header.php';
@@ -226,7 +259,6 @@ require_once __DIR__ . '/../../includes/header.php';
 <div class="container py-4">
 
     <!-- Header -->
-
     <div class="d-flex justify-content-between align-items-center mb-4">
 
         <div>
@@ -252,7 +284,6 @@ require_once __DIR__ . '/../../includes/header.php';
 
 
     <!-- Lead Information -->
-
     <div class="hm-card p-4 mb-4">
 
         <h5 class="mb-3">
@@ -266,11 +297,13 @@ require_once __DIR__ . '/../../includes/header.php';
                 <strong>Name</strong>
 
                 <div class="mt-1">
+
                     <?php
                     echo htmlspecialchars(
                         $lead['name']
                     );
                     ?>
+
                 </div>
 
             </div>
@@ -281,11 +314,13 @@ require_once __DIR__ . '/../../includes/header.php';
                 <strong>Phone</strong>
 
                 <div class="mt-1">
+
                     <?php
                     echo htmlspecialchars(
                         $lead['phone']
                     );
                     ?>
+
                 </div>
 
             </div>
@@ -296,12 +331,14 @@ require_once __DIR__ . '/../../includes/header.php';
                 <strong>Service Interest</strong>
 
                 <div class="mt-1">
+
                     <?php
                     echo htmlspecialchars(
                         $lead['service_interest']
                         ?: '-'
                     );
                     ?>
+
                 </div>
 
             </div>
@@ -312,12 +349,14 @@ require_once __DIR__ . '/../../includes/header.php';
                 <strong>Source</strong>
 
                 <div class="mt-1">
+
                     <?php
                     echo htmlspecialchars(
                         $lead['source_name']
                         ?: '-'
                     );
                     ?>
+
                 </div>
 
             </div>
@@ -328,20 +367,20 @@ require_once __DIR__ . '/../../includes/header.php';
 
 
     <!-- Error -->
-
     <?php if ($error !== ''): ?>
 
         <div class="alert alert-danger">
+
             <?php
             echo htmlspecialchars($error);
             ?>
+
         </div>
 
     <?php endif; ?>
 
 
     <!-- Appointment Form -->
-
     <div class="hm-card p-4">
 
         <h5 class="mb-4">
@@ -353,7 +392,6 @@ require_once __DIR__ . '/../../includes/header.php';
             <div class="row g-3">
 
                 <!-- Appointment Date -->
-
                 <div class="col-md-6">
 
                     <label
@@ -376,7 +414,6 @@ require_once __DIR__ . '/../../includes/header.php';
 
 
                 <!-- Appointment Type -->
-
                 <div class="col-md-6">
 
                     <label
@@ -422,7 +459,6 @@ require_once __DIR__ . '/../../includes/header.php';
 
 
                 <!-- Notes -->
-
                 <div class="col-12">
 
                     <label
@@ -444,7 +480,6 @@ require_once __DIR__ . '/../../includes/header.php';
 
 
                 <!-- Buttons -->
-
                 <div class="col-12 mt-4">
 
                     <button

@@ -224,6 +224,14 @@ $connection_progress = min(
             font-size: 30px;
             font-weight: 700;
         }
+        .navbar-custom {
+    background: #17324d;
+}
+
+.navbar-brand,
+.nav-link {
+    color: #ffffff !important;
+}
 
         .section-card {
             border: none;

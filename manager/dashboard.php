@@ -8,11 +8,10 @@ require_role('manager');
 $user = current_user();
 
 /*
-
+|--------------------------------------------------------------------------
 | Total Leads
-
+|--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->query("
     SELECT COUNT(*)
     FROM leads
@@ -22,11 +21,10 @@ $total_leads = (int) $stmt->fetchColumn();
 
 
 /*
-
+|--------------------------------------------------------------------------
 | New Leads
-
+|--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->query("
     SELECT COUNT(*)
     FROM leads
@@ -37,11 +35,10 @@ $new_leads = (int) $stmt->fetchColumn();
 
 
 /*
-
+|--------------------------------------------------------------------------
 | Today's Follow-ups
-
+|--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->query("
     SELECT COUNT(*)
     FROM leads
@@ -53,11 +50,10 @@ $today_followups = (int) $stmt->fetchColumn();
 
 
 /*
-
+|--------------------------------------------------------------------------
 | Overdue Follow-ups
-
+|--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->query("
     SELECT COUNT(*)
     FROM leads
@@ -69,11 +65,10 @@ $overdue_followups = (int) $stmt->fetchColumn();
 
 
 /*
-
+|--------------------------------------------------------------------------
 | Today's Calls
-
+|--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->query("
     SELECT COUNT(*)
     FROM lead_calls
@@ -84,11 +79,10 @@ $today_calls = (int) $stmt->fetchColumn();
 
 
 /*
-
+|--------------------------------------------------------------------------
 | Today's Appointments
-
+|--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->query("
     SELECT COUNT(*)
     FROM appointments
@@ -100,11 +94,10 @@ $today_appointments = (int) $stmt->fetchColumn();
 
 
 /*
-
-| Active Team Members
-
+|--------------------------------------------------------------------------
+| Active Marketing Team Members
+|--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->query("
     SELECT COUNT(*)
     FROM users u
@@ -118,26 +111,21 @@ $active_team = (int) $stmt->fetchColumn();
 
 
 /*
-
+|--------------------------------------------------------------------------
 | Team Members
-
+|--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->query("
     SELECT
         u.id,
         u.name,
         u.email,
         r.display_name AS role_name
-
     FROM users u
-
     INNER JOIN roles r
         ON u.role_id = r.id
-
     WHERE u.status = 'active'
       AND r.name IN ('telecaller', 'marketing')
-
     ORDER BY u.name ASC
 ");
 
@@ -145,11 +133,10 @@ $team_members = $stmt->fetchAll();
 
 
 /*
-
+|--------------------------------------------------------------------------
 | Recent Lead Activities
-
+|--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->query("
     SELECT
         la.activity_type,
@@ -157,17 +144,12 @@ $stmt = $pdo->query("
         la.activity_at,
         l.name AS lead_name,
         u.name AS user_name
-
     FROM lead_activities la
-
     INNER JOIN leads l
         ON la.lead_id = l.id
-
     INNER JOIN users u
         ON la.user_id = u.id
-
     ORDER BY la.activity_at DESC
-
     LIMIT 10
 ");
 
@@ -175,11 +157,10 @@ $recent_activities = $stmt->fetchAll();
 
 
 /*
-
+|--------------------------------------------------------------------------
 | Recent Leads
-
+|--------------------------------------------------------------------------
 */
-
 $stmt = $pdo->query("
     SELECT
         l.id,
@@ -190,14 +171,10 @@ $stmt = $pdo->query("
         l.priority,
         l.created_at,
         u.name AS assigned_name
-
     FROM leads l
-
     LEFT JOIN users u
         ON l.assigned_to = u.id
-
     ORDER BY l.created_at DESC
-
     LIMIT 10
 ");
 
@@ -212,11 +189,7 @@ require_once __DIR__ . '/../includes/header.php';
 
 <div class="container py-4">
 
-
-    
     <!-- PAGE HEADER -->
-    
-
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
 
         <div>
@@ -226,8 +199,8 @@ require_once __DIR__ . '/../includes/header.php';
             </h1>
 
             <p class="hm-muted mb-0">
-                 Welcome ,
-                 <?php echo htmlspecialchars($user['name']); ?>
+                Welcome,
+                <?php echo htmlspecialchars($user['name']); ?>
             </p>
 
         </div>
@@ -236,7 +209,6 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="d-flex flex-wrap gap-2 mt-3 mt-md-0">
 
             <!-- Manager Control Center -->
-
             <a
                 href="<?php echo BASE_URL; ?>/manager/control-center.php"
                 class="btn btn-outline-primary"
@@ -246,7 +218,6 @@ require_once __DIR__ . '/../includes/header.php';
 
 
             <!-- Add Lead -->
-
             <a
                 href="<?php echo BASE_URL; ?>/leads/add.php"
                 class="btn btn-hm-primary"
@@ -259,10 +230,7 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 
 
-    
     <!-- CONTROL CENTER SHORTCUT -->
-    
-
     <div class="hm-card p-4 mb-4">
 
         <div class="d-flex flex-wrap justify-content-between align-items-center">
@@ -297,15 +265,10 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 
 
-    
     <!-- KPI CARDS -->
-    
-
     <div class="row g-3 mb-4">
 
-
         <!-- Total Leads -->
-
         <div class="col-md-3">
 
             <div class="hm-card p-4 h-100">
@@ -324,7 +287,6 @@ require_once __DIR__ . '/../includes/header.php';
 
 
         <!-- New Leads -->
-
         <div class="col-md-3">
 
             <div class="hm-card p-4 h-100">
@@ -343,7 +305,6 @@ require_once __DIR__ . '/../includes/header.php';
 
 
         <!-- Today's Follow-ups -->
-
         <div class="col-md-3">
 
             <div class="hm-card p-4 h-100">
@@ -362,7 +323,6 @@ require_once __DIR__ . '/../includes/header.php';
 
 
         <!-- Overdue -->
-
         <div class="col-md-3">
 
             <div class="hm-card p-4 h-100">
@@ -382,15 +342,10 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 
 
-    
     <!-- SECOND KPI ROW -->
-    
-
     <div class="row g-3 mb-4">
 
-
         <!-- Today's Calls -->
-
         <div class="col-md-4">
 
             <div class="hm-card p-4 h-100">
@@ -404,7 +359,7 @@ require_once __DIR__ . '/../includes/header.php';
                 </h2>
 
                 <a
-                    href="<?php echo BASE_URL; ?>/reports/activities.php"
+                    href="<?php echo BASE_URL; ?>/manager/control-center.php"
                     class="small"
                 >
                     View Activities
@@ -416,7 +371,6 @@ require_once __DIR__ . '/../includes/header.php';
 
 
         <!-- Today's Appointments -->
-
         <div class="col-md-4">
 
             <div class="hm-card p-4 h-100">
@@ -430,10 +384,10 @@ require_once __DIR__ . '/../includes/header.php';
                 </h2>
 
                 <a
-                    href="<?php echo BASE_URL; ?>/reports/leads.php"
+                    href="<?php echo BASE_URL; ?>/manager/control-center.php"
                     class="small"
                 >
-                    View Leads
+                    View Appointments
                 </a>
 
             </div>
@@ -442,7 +396,6 @@ require_once __DIR__ . '/../includes/header.php';
 
 
         <!-- Team -->
-
         <div class="col-md-4">
 
             <div class="hm-card p-4 h-100">
@@ -469,17 +422,11 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 
 
-    
     <!-- CONTENT -->
-    
-
     <div class="row g-4">
 
 
-        <!-- ===================================================== -->
         <!-- TEAM MEMBERS -->
-        <!-- ===================================================== -->
-
         <div class="col-lg-5">
 
             <div class="hm-card p-4 h-100">
@@ -503,13 +450,10 @@ require_once __DIR__ . '/../includes/header.php';
                 <?php if (empty($team_members)): ?>
 
                     <div class="alert alert-light">
-
                         No active marketing team members.
-
                     </div>
 
                 <?php else: ?>
-
 
                     <?php foreach ($team_members as $member): ?>
 
@@ -518,13 +462,11 @@ require_once __DIR__ . '/../includes/header.php';
                             <div class="d-flex justify-content-between">
 
                                 <strong>
-
                                     <?php
                                     echo htmlspecialchars(
                                         $member['name']
                                     );
                                     ?>
-
                                 </strong>
 
 
@@ -555,7 +497,6 @@ require_once __DIR__ . '/../includes/header.php';
 
                     <?php endforeach; ?>
 
-
                 <?php endif; ?>
 
             </div>
@@ -563,10 +504,7 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
 
 
-        <!-- ===================================================== -->
         <!-- RECENT ACTIVITIES -->
-        <!-- ===================================================== -->
-
         <div class="col-lg-7">
 
             <div class="hm-card p-4 h-100">
@@ -577,11 +515,12 @@ require_once __DIR__ . '/../includes/header.php';
                         Recent Activities
                     </h5>
 
+                    <!-- Fixed broken report link -->
                     <a
-                        href="<?php echo BASE_URL; ?>/reports/activities.php"
+                        href="<?php echo BASE_URL; ?>/manager/control-center.php"
                         class="small"
                     >
-                        View Report
+                        View Activities
                     </a>
 
                 </div>
@@ -590,13 +529,10 @@ require_once __DIR__ . '/../includes/header.php';
                 <?php if (empty($recent_activities)): ?>
 
                     <div class="alert alert-light">
-
                         No activities recorded yet.
-
                     </div>
 
                 <?php else: ?>
-
 
                     <?php foreach ($recent_activities as $activity): ?>
 
@@ -673,7 +609,6 @@ require_once __DIR__ . '/../includes/header.php';
 
                     <?php endforeach; ?>
 
-
                 <?php endif; ?>
 
             </div>
@@ -681,10 +616,7 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
 
 
-        <!-- ===================================================== -->
         <!-- RECENT LEADS -->
-        <!-- ===================================================== -->
-
         <div class="col-12">
 
             <div class="hm-card p-4">
@@ -708,13 +640,10 @@ require_once __DIR__ . '/../includes/header.php';
                 <?php if (empty($recent_leads)): ?>
 
                     <div class="alert alert-light">
-
                         No leads found.
-
                     </div>
 
                 <?php else: ?>
-
 
                     <div class="table-responsive">
 
@@ -758,7 +687,6 @@ require_once __DIR__ . '/../includes/header.php';
 
 
                             <tbody>
-
 
                                 <?php foreach ($recent_leads as $lead): ?>
 
@@ -855,20 +783,17 @@ require_once __DIR__ . '/../includes/header.php';
 
                                 <?php endforeach; ?>
 
-
                             </tbody>
 
                         </table>
 
                     </div>
 
-
                 <?php endif; ?>
 
             </div>
 
         </div>
-
 
     </div>
 

@@ -169,9 +169,9 @@ require_once __DIR__ . '/includes/header.php';
 
                 <div class="text-center mb-4">
 
-                    <span class="badge text-bg-light mb-3">
+                    <!-- <span class="badge text-bg-light mb-3">
                         Secure Access
-                    </span>
+                    </span> -->
 
                     <h1 class="hm-page-title h3">
                         Staff Login
@@ -253,12 +253,12 @@ require_once __DIR__ . '/includes/header.php';
 
                 <div class="text-center mt-4">
 
-                    <small class="hm-muted">
+                    <!-- <small class="hm-muted">
 
                         Administrator setup is available only
                         during initial system configuration.
 
-                    </small>
+                    </small> -->
 
                 </div>
 
