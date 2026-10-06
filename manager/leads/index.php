@@ -10,16 +10,164 @@ $user = current_user();
 $error = '';
 $success = '';
 
+
+/*
+|--------------------------------------------------------------------------
+| Process Lead Deletion
+|--------------------------------------------------------------------------
+*/
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    ($_POST['action'] ?? '') === 'delete_lead'
+) {
+
+    $delete_lead_id = (int) ($_POST['lead_id'] ?? 0);
+
+    if ($delete_lead_id <= 0) {
+
+        $error = 'Invalid lead selected.';
+
+    } else {
+
+        try {
+
+            /*
+            |--------------------------------------------------------------------------
+            | Check Lead Exists
+            |--------------------------------------------------------------------------
+            */
+
+            $stmt = $pdo->prepare("
+                SELECT
+                    id,
+                    name
+                FROM leads
+                WHERE id = ?
+                LIMIT 1
+            ");
+
+            $stmt->execute([
+                $delete_lead_id
+            ]);
+
+            $delete_lead = $stmt->fetch();
+
+            if (!$delete_lead) {
+                throw new Exception('Lead not found.');
+            }
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Start Transaction
+            |--------------------------------------------------------------------------
+            */
+
+            $pdo->beginTransaction();
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Delete Lead Activities
+            |--------------------------------------------------------------------------
+            */
+
+            $stmt = $pdo->prepare("
+                DELETE FROM lead_activities
+                WHERE lead_id = ?
+            ");
+
+            $stmt->execute([
+                $delete_lead_id
+            ]);
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Delete Lead Calls
+            |--------------------------------------------------------------------------
+            */
+
+            $stmt = $pdo->prepare("
+                DELETE FROM lead_calls
+                WHERE lead_id = ?
+            ");
+
+            $stmt->execute([
+                $delete_lead_id
+            ]);
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Delete Appointments
+            |--------------------------------------------------------------------------
+            */
+
+            $stmt = $pdo->prepare("
+                DELETE FROM appointments
+                WHERE lead_id = ?
+            ");
+
+            $stmt->execute([
+                $delete_lead_id
+            ]);
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Delete Lead
+            |--------------------------------------------------------------------------
+            */
+
+            $stmt = $pdo->prepare("
+                DELETE FROM leads
+                WHERE id = ?
+            ");
+
+            $stmt->execute([
+                $delete_lead_id
+            ]);
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Commit
+            |--------------------------------------------------------------------------
+            */
+
+            $pdo->commit();
+
+            $success = 'Lead deleted successfully.';
+
+        } catch (Exception $e) {
+
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            $error = 'Unable to delete lead.';
+        }
+    }
+}
+
+
 /*
 |--------------------------------------------------------------------------
 | Process Lead Assignment
 |--------------------------------------------------------------------------
 */
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST' &&
+    ($_POST['action'] ?? '') === 'assign_lead'
+) {
 
     $lead_id = (int) ($_POST['lead_id'] ?? 0);
+
     $assigned_to = (int) ($_POST['assigned_to'] ?? 0);
+
 
     if ($lead_id <= 0) {
 
@@ -48,6 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         $lead = $stmt->fetch();
+
 
         if (!$lead) {
 
@@ -87,12 +236,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $new_assignee = $stmt->fetch();
 
+
                 if (!$new_assignee) {
 
                     $error =
                         'Please select a valid Telecaller or Marketing Executive.';
                 }
             }
+
 
             /*
             |--------------------------------------------------------------------------
@@ -105,6 +256,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
 
                     $pdo->beginTransaction();
+
 
                     /*
                     |--------------------------------------------------------------------------
@@ -124,6 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             : null,
                         $lead_id
                     ]);
+
 
                     /*
                     |--------------------------------------------------------------------------
@@ -145,6 +298,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $activity_description =
                             'Lead assignment removed.';
                     }
+
 
                     $stmt = $pdo->prepare("
                         INSERT INTO lead_activities (
@@ -169,6 +323,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $activity_description
                     ]);
 
+
                     $pdo->commit();
 
                     $success =
@@ -188,6 +343,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+
 /*
 |--------------------------------------------------------------------------
 | Search
@@ -195,6 +351,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 */
 
 $search = trim($_GET['search'] ?? '');
+
 
 /*
 |--------------------------------------------------------------------------
@@ -204,6 +361,7 @@ $search = trim($_GET['search'] ?? '');
 
 $status_filter = trim($_GET['status'] ?? '');
 
+
 /*
 |--------------------------------------------------------------------------
 | Priority Filter
@@ -212,6 +370,7 @@ $status_filter = trim($_GET['status'] ?? '');
 
 $priority_filter = trim($_GET['priority'] ?? '');
 
+
 /*
 |--------------------------------------------------------------------------
 | Assignment Filter
@@ -219,6 +378,7 @@ $priority_filter = trim($_GET['priority'] ?? '');
 */
 
 $assignment_filter = trim($_GET['assignment'] ?? '');
+
 
 /*
 |--------------------------------------------------------------------------
@@ -241,6 +401,7 @@ $stmt = $pdo->query("
 
 $staff_members = $stmt->fetchAll();
 
+
 /*
 |--------------------------------------------------------------------------
 | Build Leads Query
@@ -259,17 +420,11 @@ $sql = "
         l.status,
         l.priority,
         l.assigned_to,
-        l.next_action_type,
-        l.next_action_at,
         l.created_at,
 
         ms.name AS source_name,
 
         c.name AS campaign_name,
-
-        ref.name AS referral_name,
-        ref.referral_type AS referral_type,
-        ref.organization AS referral_organization,
 
         u.name AS assigned_name,
 
@@ -283,9 +438,6 @@ $sql = "
     LEFT JOIN campaigns c
         ON l.campaign_id = c.id
 
-    LEFT JOIN referrals ref
-        ON l.referral_id = ref.id
-
     LEFT JOIN users u
         ON l.assigned_to = u.id
 
@@ -297,6 +449,7 @@ $sql = "
 ";
 
 $params = [];
+
 
 /*
 |--------------------------------------------------------------------------
@@ -325,6 +478,7 @@ if ($search !== '') {
     $params[] = '%' . $search . '%';
 }
 
+
 /*
 |--------------------------------------------------------------------------
 | Status Filter
@@ -341,6 +495,7 @@ if ($status_filter !== '') {
 
     $params[] = $status_filter;
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -366,6 +521,7 @@ if (
     $params[] = $priority_filter;
 }
 
+
 /*
 |--------------------------------------------------------------------------
 | Assignment Filter
@@ -389,6 +545,7 @@ if ($assignment_filter === 'unassigned') {
     ";
 }
 
+
 /*
 |--------------------------------------------------------------------------
 | Order
@@ -401,11 +558,13 @@ $sql .= "
 
 ";
 
+
 $stmt = $pdo->prepare($sql);
 
 $stmt->execute($params);
 
 $leads = $stmt->fetchAll();
+
 
 /*
 |--------------------------------------------------------------------------
@@ -432,25 +591,252 @@ $stmt = $pdo->query("
 
 $summary = $stmt->fetch();
 
+
 $total_leads =
     (int) ($summary['total_leads'] ?? 0);
+
 
 $new_leads =
     (int) ($summary['new_leads'] ?? 0);
 
+
 $unassigned_leads =
     (int) ($summary['unassigned_leads'] ?? 0);
+
 
 $overdue_leads =
     (int) ($summary['overdue_leads'] ?? 0);
 
+
 $page_title = 'Lead Management';
+
 
 require_once __DIR__ . '/../../includes/header.php';
 
 ?>
 
+
+<style>
+
+/*
+|--------------------------------------------------------------------------
+| Lead Management Table
+|--------------------------------------------------------------------------
+*/
+
+.leads-table-wrapper {
+    width: 100%;
+    overflow: hidden;
+}
+
+.leads-table {
+    width: 100%;
+    table-layout: fixed;
+    margin-bottom: 0;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.leads-table th {
+    font-size: 13px;
+    font-weight: 700;
+    color: #212529;
+    padding: 11px 8px;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.leads-table td {
+    font-size: 13px;
+    color: #212529;
+    padding: 11px 8px;
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+.leads-table tbody tr {
+    border-bottom: 1px solid #dee2e6;
+}
+
+.leads-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Lead Name
+|--------------------------------------------------------------------------
+*/
+
+.lead-name {
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Contact
+|--------------------------------------------------------------------------
+*/
+
+.lead-phone {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.lead-email {
+    display: block;
+    margin-top: 3px;
+    color: #6c757d;
+    font-size: 12px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Service
+|--------------------------------------------------------------------------
+*/
+
+.lead-service {
+    font-weight: 500;
+    line-height: 1.45;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Campaign
+|--------------------------------------------------------------------------
+*/
+
+.lead-campaign {
+    line-height: 1.4;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Status
+|--------------------------------------------------------------------------
+*/
+
+.lead-status {
+    display: inline-block;
+    max-width: 100%;
+    padding: 4px 7px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: normal;
+    text-align: center;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Priority
+|--------------------------------------------------------------------------
+*/
+
+.lead-priority {
+    font-weight: 600;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Assignment
+|--------------------------------------------------------------------------
+*/
+
+.assignment-cell select {
+    width: 100%;
+    min-width: 0;
+    font-size: 12px;
+    padding: 6px 7px;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Action Buttons
+|--------------------------------------------------------------------------
+*/
+
+.action-cell {
+    vertical-align: middle;
+}
+
+.lead-action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.lead-action-buttons .btn {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 8px;
+    white-space: nowrap;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Table Card
+|--------------------------------------------------------------------------
+*/
+
+.lead-table-card {
+    overflow: hidden;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Responsive
+|--------------------------------------------------------------------------
+*/
+
+@media (max-width: 1100px) {
+
+    .leads-table {
+        font-size: 12px;
+    }
+
+    .leads-table th,
+    .leads-table td {
+        padding: 8px 5px;
+    }
+
+    .lead-phone {
+        white-space: normal;
+    }
+
+    .lead-action-buttons {
+        gap: 3px;
+    }
+
+    .lead-action-buttons .btn {
+        font-size: 11px;
+        padding: 4px 6px;
+    }
+
+}
+
+</style>
+
+
 <div class="container py-4">
+
 
     <!-- Page Header -->
 
@@ -468,6 +854,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
         </div>
 
+
         <div class="d-flex gap-2">
 
             <a
@@ -476,6 +863,7 @@ require_once __DIR__ . '/../../includes/header.php';
             >
                 + Add Lead
             </a>
+
 
             <a
                 href="<?php echo BASE_URL; ?>/manager/dashboard.php"
@@ -488,9 +876,11 @@ require_once __DIR__ . '/../../includes/header.php';
 
     </div>
 
+
     <!-- Summary Cards -->
 
     <div class="row g-3 mb-4">
+
 
         <div class="col-md-3">
 
@@ -508,6 +898,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
         </div>
 
+
         <div class="col-md-3">
 
             <div class="hm-card p-4 h-100">
@@ -524,6 +915,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
         </div>
 
+
         <div class="col-md-3">
 
             <div class="hm-card p-4 h-100">
@@ -539,6 +931,7 @@ require_once __DIR__ . '/../../includes/header.php';
             </div>
 
         </div>
+
 
         <div class="col-md-3">
 
@@ -558,7 +951,8 @@ require_once __DIR__ . '/../../includes/header.php';
 
     </div>
 
-    <!-- Messages -->
+
+    <!-- Success Message -->
 
     <?php if ($success !== ''): ?>
 
@@ -572,6 +966,9 @@ require_once __DIR__ . '/../../includes/header.php';
 
     <?php endif; ?>
 
+
+    <!-- Error Message -->
+
     <?php if ($error !== ''): ?>
 
         <div class="alert alert-danger">
@@ -584,6 +981,7 @@ require_once __DIR__ . '/../../includes/header.php';
 
     <?php endif; ?>
 
+
     <!-- Filters -->
 
     <div class="hm-card p-4 mb-4">
@@ -591,6 +989,9 @@ require_once __DIR__ . '/../../includes/header.php';
         <form method="GET">
 
             <div class="row g-3 align-items-end">
+
+
+                <!-- Search -->
 
                 <div class="col-lg-4">
 
@@ -612,6 +1013,9 @@ require_once __DIR__ . '/../../includes/header.php';
 
                 </div>
 
+
+                <!-- Status -->
+
                 <div class="col-md-2">
 
                     <label
@@ -631,6 +1035,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             All
                         </option>
 
+
                         <?php
 
                         $statuses = [
@@ -643,6 +1048,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         ];
 
                         ?>
+
 
                         <?php foreach ($statuses as $status): ?>
 
@@ -663,9 +1069,13 @@ require_once __DIR__ . '/../../includes/header.php';
 
                         <?php endforeach; ?>
 
+
                     </select>
 
                 </div>
+
+
+                <!-- Priority -->
 
                 <div class="col-md-2">
 
@@ -686,7 +1096,11 @@ require_once __DIR__ . '/../../includes/header.php';
                             All
                         </option>
 
-                        <?php foreach (['Low', 'Medium', 'High'] as $priority): ?>
+
+                        <?php foreach (
+                            ['Low', 'Medium', 'High']
+                            as $priority
+                        ): ?>
 
                             <option
                                 value="<?php echo htmlspecialchars($priority); ?>"
@@ -705,9 +1119,13 @@ require_once __DIR__ . '/../../includes/header.php';
 
                         <?php endforeach; ?>
 
+
                     </select>
 
                 </div>
+
+
+                <!-- Assignment -->
 
                 <div class="col-md-2">
 
@@ -728,6 +1146,7 @@ require_once __DIR__ . '/../../includes/header.php';
                             All
                         </option>
 
+
                         <option
                             value="assigned"
                             <?php
@@ -738,6 +1157,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         >
                             Assigned
                         </option>
+
 
                         <option
                             value="unassigned"
@@ -750,9 +1170,13 @@ require_once __DIR__ . '/../../includes/header.php';
                             Unassigned
                         </option>
 
+
                     </select>
 
                 </div>
+
+
+                <!-- Filter Buttons -->
 
                 <div class="col-md-2 d-flex gap-2">
 
@@ -763,6 +1187,7 @@ require_once __DIR__ . '/../../includes/header.php';
                         Filter
                     </button>
 
+
                     <a
                         href="<?php echo BASE_URL; ?>/manager/leads/"
                         class="btn btn-outline-secondary"
@@ -772,15 +1197,18 @@ require_once __DIR__ . '/../../includes/header.php';
 
                 </div>
 
+
             </div>
 
         </form>
 
     </div>
 
+
     <!-- Lead Table -->
 
-    <div class="hm-card p-4">
+    <div class="hm-card p-4 lead-table-card">
+
 
         <div class="d-flex justify-content-between align-items-center mb-3">
 
@@ -788,23 +1216,61 @@ require_once __DIR__ . '/../../includes/header.php';
                 Leads
             </h5>
 
+
             <span class="hm-muted">
                 <?php echo count($leads); ?> lead(s)
             </span>
 
         </div>
 
+
         <?php if (empty($leads)): ?>
+
 
             <div class="alert alert-light mb-0">
                 No leads found.
             </div>
 
+
         <?php else: ?>
 
-            <div class="table-responsive">
 
-                <table class="table align-middle">
+            <div class="leads-table-wrapper">
+
+
+                <table class="table align-middle leads-table">
+
+
+                    <!-- Fixed Column Widths -->
+
+                    <colgroup>
+
+                        <!-- Lead -->
+                        <col style="width: 13%;">
+
+                        <!-- Contact -->
+                        <col style="width: 17%;">
+
+                        <!-- Service -->
+                        <col style="width: 14%;">
+
+                        <!-- Campaign -->
+                        <col style="width: 9%;">
+
+                        <!-- Status -->
+                        <col style="width: 11%;">
+
+                        <!-- Priority -->
+                        <col style="width: 8%;">
+
+                        <!-- Assigned To -->
+                        <col style="width: 15%;">
+
+                        <!-- Action -->
+                        <col style="width: 13%;">
+
+                    </colgroup>
+
 
                     <thead>
 
@@ -827,10 +1293,6 @@ require_once __DIR__ . '/../../includes/header.php';
                             </th>
 
                             <th>
-                                Referral Partner
-                            </th>
-
-                            <th>
                                 Status
                             </th>
 
@@ -843,10 +1305,6 @@ require_once __DIR__ . '/../../includes/header.php';
                             </th>
 
                             <th>
-                                Next Action
-                            </th>
-
-                            <th>
                                 Action
                             </th>
 
@@ -854,17 +1312,21 @@ require_once __DIR__ . '/../../includes/header.php';
 
                     </thead>
 
+
                     <tbody>
+
 
                         <?php foreach ($leads as $lead): ?>
 
+
                             <tr>
+
 
                                 <!-- Lead -->
 
                                 <td>
 
-                                    <strong>
+                                    <div class="lead-name">
 
                                         <?php
 
@@ -874,15 +1336,16 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                         ?>
 
-                                    </strong>
+                                    </div>
 
                                 </td>
+
 
                                 <!-- Contact -->
 
                                 <td>
 
-                                    <div>
+                                    <div class="lead-phone">
 
                                         <?php
 
@@ -894,9 +1357,10 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                     </div>
 
+
                                     <?php if (!empty($lead['email'])): ?>
 
-                                        <small class="hm-muted">
+                                        <span class="lead-email">
 
                                             <?php
 
@@ -906,34 +1370,45 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                             ?>
 
-                                        </small>
+                                        </span>
 
                                     <?php endif; ?>
 
+
                                 </td>
+
 
                                 <!-- Service -->
 
                                 <td>
 
-                                    <?php
+                                    <div class="lead-service">
 
-                                    echo htmlspecialchars(
-                                        $lead['service_interest']
-                                        ?: '-'
-                                    );
+                                        <?php
 
-                                    ?>
+                                        echo htmlspecialchars(
+                                            $lead['service_interest']
+                                            ?: '-'
+                                        );
+
+                                        ?>
+
+                                    </div>
 
                                 </td>
+
 
                                 <!-- Campaign -->
 
                                 <td>
 
-                                    <?php if (!empty($lead['campaign_name'])): ?>
+                                    <div class="lead-campaign">
 
-                                        <span>
+                                        <?php if (
+                                            !empty(
+                                                $lead['campaign_name']
+                                            )
+                                        ): ?>
 
                                             <?php
 
@@ -943,91 +1418,24 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                             ?>
 
-                                        </span>
+                                        <?php else: ?>
 
-                                    <?php else: ?>
-
-                                        <span class="hm-muted">
-                                            -
-                                        </span>
-
-                                    <?php endif; ?>
-
-                                </td>
-
-                                <!-- Referral Partner -->
-
-                                <td style="min-width: 180px;">
-
-                                    <?php if (!empty($lead['referral_name'])): ?>
-
-                                        <div>
-
-                                            <strong>
-
-                                                <?php
-
-                                                echo htmlspecialchars(
-                                                    $lead['referral_name']
-                                                );
-
-                                                ?>
-
-                                            </strong>
-
-                                        </div>
-
-                                        <?php if (!empty($lead['referral_type'])): ?>
-
-                                            <small class="hm-muted">
-
-                                                <?php
-
-                                                echo htmlspecialchars(
-                                                    $lead['referral_type']
-                                                );
-
-                                                ?>
-
-                                            </small>
+                                            <span class="hm-muted">
+                                                -
+                                            </span>
 
                                         <?php endif; ?>
 
-                                        <?php if (!empty($lead['referral_organization'])): ?>
-
-                                            <div>
-
-                                                <small class="hm-muted">
-
-                                                    <?php
-
-                                                    echo htmlspecialchars(
-                                                        $lead['referral_organization']
-                                                    );
-
-                                                    ?>
-
-                                                </small>
-
-                                            </div>
-
-                                        <?php endif; ?>
-
-                                    <?php else: ?>
-
-                                        <span class="hm-muted">
-                                            -
-                                        </span>
-
-                                    <?php endif; ?>
+                                    </div>
 
                                 </td>
+
 
                                 <!-- Status -->
 
                                 <td>
 
-                                    <span class="badge bg-secondary">
+                                    <span class="lead-status badge bg-secondary">
 
                                         <?php
 
@@ -1041,25 +1449,39 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                 </td>
 
+
                                 <!-- Priority -->
 
                                 <td>
 
-                                    <?php
+                                    <span class="lead-priority">
 
-                                    echo htmlspecialchars(
-                                        $lead['priority']
-                                    );
+                                        <?php
 
-                                    ?>
+                                        echo htmlspecialchars(
+                                            $lead['priority']
+                                        );
+
+                                        ?>
+
+                                    </span>
 
                                 </td>
 
-                                <!-- Assignment -->
 
-                                <td style="min-width: 210px;">
+                                <!-- Assigned To -->
+
+                                <td class="assignment-cell">
 
                                     <form method="POST">
+
+
+                                        <input
+                                            type="hidden"
+                                            name="action"
+                                            value="assign_lead"
+                                        >
+
 
                                         <input
                                             type="hidden"
@@ -1067,25 +1489,41 @@ require_once __DIR__ . '/../../includes/header.php';
                                             value="<?php echo (int) $lead['id']; ?>"
                                         >
 
+
                                         <select
                                             name="assigned_to"
                                             class="form-select form-select-sm"
                                             onchange="this.form.submit()"
                                         >
 
+
                                             <option value="0">
                                                 Unassigned
                                             </option>
 
-                                            <?php foreach ($staff_members as $staff): ?>
+
+                                            <?php foreach (
+                                                $staff_members
+                                                as $staff
+                                            ): ?>
+
 
                                                 <option
                                                     value="<?php echo (int) $staff['id']; ?>"
                                                     <?php
-                                                    echo (int) $lead['assigned_to']
-                                                        === (int) $staff['id']
+
+                                                    echo (
+                                                        (int)
+                                                        $lead[
+                                                            'assigned_to'
+                                                        ]
+                                                        ===
+                                                        (int)
+                                                        $staff['id']
+                                                    )
                                                         ? 'selected'
                                                         : '';
+
                                                     ?>
                                                 >
 
@@ -1103,7 +1541,9 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                                     echo htmlspecialchars(
                                                         ucfirst(
-                                                            $staff['role_name']
+                                                            $staff[
+                                                                'role_name'
+                                                            ]
                                                         )
                                                     );
 
@@ -1111,93 +1551,109 @@ require_once __DIR__ . '/../../includes/header.php';
 
                                                 </option>
 
+
                                             <?php endforeach; ?>
 
+
                                         </select>
+
 
                                     </form>
 
                                 </td>
 
-                                <!-- Next Action -->
-
-                                <td>
-
-                                    <?php if (!empty($lead['next_action_at'])): ?>
-
-                                        <div>
-
-                                            <?php
-
-                                            echo htmlspecialchars(
-                                                $lead['next_action_type']
-                                                ?: 'Action'
-                                            );
-
-                                            ?>
-
-                                        </div>
-
-                                        <small class="hm-muted">
-
-                                            <?php
-
-                                            echo date(
-                                                'd M Y, h:i A',
-                                                strtotime(
-                                                    $lead['next_action_at']
-                                                )
-                                            );
-
-                                            ?>
-
-                                        </small>
-
-                                    <?php else: ?>
-
-                                        <span class="hm-muted">
-                                            No next action
-                                        </span>
-
-                                    <?php endif; ?>
-
-                                </td>
 
                                 <!-- Actions -->
 
-                                <td>
+                                <td class="action-cell">
 
-                                    <a
-                                        href="<?php echo BASE_URL; ?>/leads/view.php?id=<?php echo (int) $lead['id']; ?>"
-                                        class="btn btn-sm btn-outline-secondary"
-                                    >
-                                        View
-                                    </a>
 
-                                    <a
-                                        href="<?php echo BASE_URL; ?>/leads/edit.php?id=<?php echo (int) $lead['id']; ?>"
-                                        class="btn btn-sm btn-outline-primary mt-1"
-                                    >
-                                        Edit
-                                    </a>
+                                    <div class="lead-action-buttons">
+
+
+                                        <!-- View -->
+
+                                        <a
+                                            href="<?php echo BASE_URL; ?>/leads/view.php?id=<?php echo (int) $lead['id']; ?>"
+                                            class="btn btn-sm btn-outline-secondary"
+                                        >
+                                            View
+                                        </a>
+
+
+                                        <!-- Edit -->
+
+                                        <a
+                                            href="<?php echo BASE_URL; ?>/leads/edit.php?id=<?php echo (int) $lead['id']; ?>"
+                                            class="btn btn-sm btn-outline-primary"
+                                        >
+                                            Edit
+                                        </a>
+
+
+                                        <!-- Delete -->
+
+                                        <form
+                                            method="POST"
+                                            class="d-inline"
+                                            onsubmit="return confirm('Are you sure you want to delete this lead? This action cannot be undone.');"
+                                        >
+
+
+                                            <input
+                                                type="hidden"
+                                                name="action"
+                                                value="delete_lead"
+                                            >
+
+
+                                            <input
+                                                type="hidden"
+                                                name="lead_id"
+                                                value="<?php echo (int) $lead['id']; ?>"
+                                            >
+
+
+                                            <button
+                                                type="submit"
+                                                class="btn btn-sm btn-outline-danger"
+                                            >
+                                                Delete
+                                            </button>
+
+
+                                        </form>
+
+
+                                    </div>
+
 
                                 </td>
 
+
                             </tr>
+
 
                         <?php endforeach; ?>
 
+
                     </tbody>
+
 
                 </table>
 
+
             </div>
+
 
         <?php endif; ?>
 
+
     </div>
 
+
 </div>
+
 
 <?php
 

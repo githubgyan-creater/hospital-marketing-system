@@ -1,0 +1,21 @@
+Hospital Marketing System - Separate Database Setup
+
+Project folder name (DO NOT CHANGE):
+hospital-marketing-system
+
+Base URL (DO NOT CHANGE):
+http://localhost/projects/hospital-marketing-system/
+
+New database name:
+hospital_marketing_system
+
+This version is intentionally separated from the older `hospital_marketing` database.
+
+Fresh setup:
+1. Start Apache and MySQL in XAMPP.
+2. Open phpMyAdmin.
+3. Import database/hospital_marketing.sql
+4. The SQL creates `hospital_marketing_system` and imports the full schema/sample data.
+5. Open the project using the Base URL above.
+
+The PHP connection is already configured for `hospital_marketing_system`.

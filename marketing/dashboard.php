@@ -118,6 +118,15 @@ require_once __DIR__ . '/../includes/header.php';
 
         </p>
 
+        <div class="mt-3">
+            <a
+                href="<?php echo BASE_URL; ?>/manager/forms/index.php"
+                class="btn btn-outline-primary"
+            >
+                Generate Form
+            </a>
+        </div>
+
     </div>
 
 

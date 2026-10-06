@@ -377,6 +377,24 @@ $user = current_user();
             <li>
                 <a
                     class="dropdown-item"
+                    href="<?php echo BASE_URL; ?>/manager/leads/bulk-import.php"
+                >
+                    Bulk Lead Import
+                </a>
+            </li>
+
+            <li>
+                <a
+                    class="dropdown-item"
+                    href="<?php echo BASE_URL; ?>/manager/forms/index.php"
+                >
+                    Generate Form
+                </a>
+            </li>
+
+            <li>
+                <a
+                    class="dropdown-item"
                     href="<?php echo BASE_URL; ?>/manager/team/index.php"
                 >
                     Team
@@ -475,7 +493,7 @@ $user = current_user();
                                 class="nav-link text-white"
                                 href="<?php echo BASE_URL; ?>/telecaller/dashboard.php"
                             >
-                                 Dashboard
+                                  Dashboard
                             </a>
                         </li>
 
@@ -537,6 +555,15 @@ $user = current_user();
         Leads
     </a>
 </li>
+
+                        <li class="nav-item">
+                            <a
+                                class="nav-link text-white"
+                                href="<?php echo BASE_URL; ?>/manager/forms/index.php"
+                            >
+                                Generate Form
+                            </a>
+                        </li>
 
 <li class="nav-item">
     <a

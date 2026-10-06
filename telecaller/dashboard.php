@@ -279,12 +279,7 @@ require_once __DIR__ . '/../includes/header.php';
 
         </div>
 
-        <a
-            href="<?php echo BASE_URL; ?>/leads/add.php"
-            class="btn btn-hm-primary"
-        >
-            + Add Lead
-        </a>
+
 
     </div>
 

@@ -225,6 +225,22 @@ require_once __DIR__ . '/../includes/header.php';
                 + Add Lead
             </a>
 
+            <!-- Bulk Import -->
+            <a
+                href="<?php echo BASE_URL; ?>/manager/leads/bulk-import.php"
+                class="btn btn-outline-primary"
+            >
+                Import Leads
+            </a>
+
+            <!-- Public Form -->
+            <a
+                href="<?php echo BASE_URL; ?>/manager/forms/index.php"
+                class="btn btn-outline-primary"
+            >
+                Generate Form
+            </a>
+
         </div>
 
     </div>
